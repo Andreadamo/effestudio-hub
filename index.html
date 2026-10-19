@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141414">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Effestudio HUB">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Effestudio HUB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f4f4f2; --surface:#ffffff; --surface-2:#ececea; --fg:#141414; --muted:#5f5f5c; --line:#dcdcd8;
+  --accent:#141414; --accent-fg:#ffffff; --crit:#b3261e; --crit-soft:#f8dcd9; --ok:#1f7a45; --ok-soft:#dcf0e3;
+  --bar:#141414; --bar-fg:#ffffff;
+  --display:"Montserrat","Arial",system-ui,sans-serif; --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif; --r:10px;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0e0e0e; --surface:#191919; --surface-2:#232323; --fg:#f2f2f0; --muted:#a3a3a0; --line:#2e2e2e;
+  --accent:#f2f2f0; --accent-fg:#141414; --crit:#f07a70; --crit-soft:#3d1d1a; --ok:#5cc489; --ok-soft:#15301f;
+  --bar:#000000; --bar-fg:#f2f2f0; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:400 16px/1.4 var(--body)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* home */
+#home{min-height:100%;padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom))}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{width:48px;height:48px;border-radius:12px}
+h1,h2{font-family:var(--display);margin:0}
+h1{font-size:22px;font-weight:800;text-transform:uppercase;letter-spacing:.02em}
+.brand small{display:block;color:var(--muted);font-size:13px}
+h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:10px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;cursor:pointer;min-height:132px;position:relative}
+.tile:hover{border-color:var(--fg)}
+.tile:active{transform:scale(.98)}
+.tile .ic{width:40px;height:40px;border-radius:10px;background:var(--accent);color:var(--accent-fg);display:flex;align-items:center;justify-content:center}
+.tile .ic svg{width:22px;height:22px}
+.tile b{font-family:var(--display);font-size:15px;font-weight:700;line-height:1.2}
+.tile span{color:var(--muted);font-size:13px;line-height:1.3}
+.tile .ext{position:absolute;top:12px;right:12px;font-size:12px;color:var(--muted);font-weight:600}
+.admin-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.lnk{background:none;border:1px solid var(--line);border-radius:var(--r);padding:9px 14px;font-weight:600;cursor:pointer;background:var(--surface)}
+.muted{color:var(--muted);font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--ok-soft);color:var(--ok);text-transform:uppercase;letter-spacing:.04em}
+
+/* app aperta */
+#shell{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+.topbar{display:flex;align-items:center;gap:6px;background:var(--bar);color:var(--bar-fg);padding:calc(6px + env(safe-area-inset-top)) 8px 6px;min-height:48px}
+.topbar button{background:transparent;border:0;color:inherit;padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px}
+.topbar button:hover{background:rgba(255,255,255,.1)}
+.topbar .t{flex:1;font-family:var(--display);font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar svg{width:20px;height:20px}
+#frames{flex:1;position:relative}
+#frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);pointer-events:none}
+
+dialog{border:0;border-radius:14px;padding:0;width:min(380px,92vw);background:var(--surface);color:var(--fg)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dlg{padding:18px;display:flex;flex-direction:column;gap:12px}
+.dlg h3{font-family:var(--display);margin:0;font-size:18px}
+.dlg input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:18px;width:100%}
+.dlg .row{display:flex;gap:8px}.dlg .row button{flex:1}
+.primary{background:var(--accent);color:var(--accent-fg);border:1px solid var(--accent);border-radius:8px;padding:11px;font-weight:700;cursor:pointer}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-weight:600;cursor:pointer}
+.err{background:var(--crit-soft);color:var(--crit);border-radius:8px;padding:10px;font-weight:600;font-size:14px}
+</style>
+</head>
+<body>
+
+<div id="home">
+  <div class="wrap">
+    <div class="brand"><img src="icons/icon-192.png" alt=""><div><h1>Effestudio HUB</h1><small>Tutte le app Effestudio in un posto</small></div></div>
+    <section><h2>Staff</h2><div class="grid" id="g-staff"></div></section>
+    <section id="s-admin" hidden><h2>Amministrazione</h2><div class="grid" id="g-admin"></div></section>
+    <div class="admin-bar">
+      <span class="muted" id="adm-state">Ogni app chiede il suo accesso come sempre.</span>
+      <button class="lnk" id="b-admin">🔒 Amministrazione</button>
+    </div>
+    <p class="muted" id="install-hint">Installa l'HUB sul telefono: Android → Chrome → menu ⋮ → Installa app · iPhone → Safari → Condividi → Aggiungi alla schermata Home.</p>
+  </div>
+</div>
+
+<div id="shell" hidden>
+  <div class="topbar">
+    <button id="b-back" aria-label="Torna all'HUB"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>HUB</button>
+    <div class="t" id="t-name"></div>
+    <button id="b-reload" aria-label="Ricarica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></button>
+    <button id="b-ext" aria-label="Apri nel browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+  </div>
+  <div id="frames"></div>
+</div>
+
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+
+<script src="apps.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function store(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
+function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
+
+const ICONS={
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  shirt:'<path d="M9 3h6l5 3-2 4-2-1v12H8V9L6 10 4 6z"/>',
+  book:'<path d="M4 19.5V5a2 2 0 0 1 2-2h14v16H6.5A2.5 2.5 0 0 0 4 21.5ZM8 7h8M8 11h6"/>',
+  euro:'<path d="M17 6.5A7 7 0 1 0 17 17.5M4 10h9M4 14h9"/>',
+  ledger:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'
+};
+const svg=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]||ICONS.book}</svg>`;
+const APPS=window.HUB_APPS||[];
+const isAdmin=()=>load("hub-admin")==="1";
+
+/* ---------- home ---------- */
+function tile(a){return `<button class="tile" data-id="${esc(a.id)}">${a.mode==="browser"?'<i class="ext">↗ browser</i>':""}<div class="ic">${svg(a.icon)}</div><b>${esc(a.name)}</b><span>${esc(a.sub)}</span></button>`}
+function renderHome(){
+  $("g-staff").innerHTML=APPS.filter(a=>a.area==="staff").map(tile).join("");
+  const adm=isAdmin();
+  $("s-admin").hidden=!adm;
+  $("g-admin").innerHTML=adm?APPS.filter(a=>a.area==="admin").map(tile).join(""):"";
+  $("b-admin").textContent=adm?"Esci da amministrazione":"🔒 Amministrazione";
+  $("adm-state").innerHTML=adm?'<span class="pill">✓ Amministrazione attiva</span>':"Ogni app chiede il suo accesso come sempre.";
+  document.querySelectorAll(".tile").forEach(b=>b.onclick=()=>openApp(b.dataset.id,true));
+  $("install-hint").hidden=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+}
+
+/* ---------- sblocco amministrazione (PIN verificato sul server EffeOre) ---------- */
+$("b-admin").onclick=()=>{
+  if(isAdmin()){store("hub-admin",null);renderHome();return}
+  $("dlgBody").innerHTML=`<h3>Amministrazione</h3><p class="muted" style="margin:0">Inserisci il PIN amministrazione (lo stesso di EffeOre).</p>
+    <input id="a-pin" type="password" inputmode="numeric" autocomplete="off"><div id="a-err" class="err" hidden></div>
+    <div class="row"><button class="sec" id="a-no">Annulla</button><button class="primary" id="a-ok">Sblocca</button></div>`;
+  $("dlg").showModal();setTimeout(()=>$("a-pin").focus(),50);
+  $("a-no").onclick=()=>$("dlg").close();
+  $("a-pin").onkeydown=e=>{if(e.key==="Enter")$("a-ok").click()};
+  $("a-ok").onclick=async()=>{
+    const b=$("a-ok");b.disabled=true;b.textContent="Verifico…";$("a-err").hidden=true;
+    try{
+      const r=await fetch(window.HUB_ADMIN_API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+        body:JSON.stringify({fn:"api_adminCheck",args:[$("a-pin").value.trim()]}),redirect:"follow",cache:"no-store"});
+      const j=await r.json();
+      if(j.ok&&j.data===true){store("hub-admin","1");$("dlg").close();renderHome()}
+      else throw new Error("PIN amministrazione non valido.");
+    }catch(e){$("a-err").textContent=/PIN/.test(e.message)?e.message:"Connessione non riuscita. Riprova.";$("a-err").hidden=false;b.disabled=false;b.textContent="Sblocca"}
+  };
+};
+
+/* ---------- apertura app dentro l'HUB ---------- */
+const frames={};let cur=null;
+function openApp(id,push){
+  const a=APPS.find(x=>x.id===id);if(!a)return;
+  if(a.area==="admin"&&!isAdmin())return;
+  if(a.mode==="browser"){window.open(a.url,"_blank","noopener");return}
+  cur=a;$("t-name").textContent=a.name;
+  Object.values(frames).forEach(f=>f.hidden=true);
+  if(!frames[id]){
+    const f=document.createElement("iframe");
+    f.src=a.url;f.title=a.name;f.allow="camera; clipboard-write; fullscreen";
+    $("frames").appendChild(f);frames[id]=f;
+  }else frames[id].hidden=false;
+  $("home").hidden=true;$("shell").hidden=false;
+  if(push)history.pushState({app:id},"","?app="+encodeURIComponent(id));
+}
+function goHome(push){
+  $("shell").hidden=true;$("home").hidden=false;cur=null;
+  if(push)history.pushState({},"",location.pathname);
+}
+$("b-back").onclick=()=>{if(history.state&&history.state.app)history.back();else goHome(true)};
+$("b-reload").onclick=()=>{if(cur&&frames[cur.id])frames[cur.id].src=cur.url};
+$("b-ext").onclick=()=>{if(cur)window.open(cur.url,"_blank","noopener")};
+window.onpopstate=e=>{const id=e.state&&e.state.app;if(id)openApp(id,false);else goHome(false)};
+
+/* ---------- avvio ---------- */
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+renderHome();
+const start=new URLSearchParams(location.search).get("app");
+if(start){history.replaceState({},"",location.pathname);history.pushState({app:start},"","?app="+encodeURIComponent(start));openApp(start,false)}
+</script>
+</body>
+</html>
