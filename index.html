@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="preconnect" href="https://script.google.com" crossorigin>
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<link rel="dns-prefetch" href="https://script.googleusercontent.com">
 <meta name="theme-color" content="#141414">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -75,6 +78,14 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .primary{background:var(--accent);color:var(--accent-fg);border:1px solid var(--accent);border-radius:8px;padding:11px;font-weight:700;cursor:pointer}
 .sec{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px;font-weight:600;cursor:pointer}
 .err{background:var(--crit-soft);color:var(--crit);border-radius:8px;padding:10px;font-weight:600;font-size:14px}
+
+/* fluidità touch (Android/iOS) */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+*{-webkit-tap-highlight-color:transparent}
+button,a,select,label,summary,[role=button]{touch-action:manipulation}
+button:not(:disabled):active{opacity:.75}
+@media (pointer:coarse){input,select,textarea{font-size:16px!important}}
+img{max-width:100%}
 </style>
 </head>
 <body>
@@ -187,6 +198,30 @@ window.onpopstate=e=>{const id=e.state&&e.state.app;if(id)openApp(id,false);else
 /* ---------- avvio ---------- */
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 renderHome();
+
+/* ---------- velocità: risveglia i server Google e prepara le app più usate ---------- */
+// I server Apps Script "dormono" dopo qualche minuto: un ping leggero all'apertura dell'HUB
+// li sveglia mentre l'utente sceglie l'app, così la prima schermata arriva in 1-2 s invece di 5-15 s.
+(function warm(){
+  let last=0;try{last=+sessionStorage.getItem("hub-warm")||0}catch(e){}
+  if(Date.now()-last<4*60*1000)return;
+  try{sessionStorage.setItem("hub-warm",String(Date.now()))}catch(e){}
+  const ping=(url,fn,args)=>fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify({fn,args:args||[]}),redirect:"follow",keepalive:true}).catch(()=>{});
+  (window.HUB_WARM||[]).forEach(w=>ping(w.url,w.fn,w.args));
+})();
+// Carica in sottofondo EffeOre e Merch Staff quando il telefono è libero: aprendole, sono già pronte.
+function preload(){
+  const slow=navigator.connection&&(navigator.connection.saveData||/2g/.test(navigator.connection.effectiveType||""));
+  if(slow)return;
+  ["effeore","merch-staff"].forEach(id=>{
+    const a=APPS.find(x=>x.id===id);if(!a||frames[id])return;
+    const f=document.createElement("iframe");f.src=a.url;f.title=a.name;f.hidden=true;f.loading="eager";
+    f.allow="camera; clipboard-write; fullscreen";$("frames").appendChild(f);frames[id]=f;
+  });
+}
+(window.requestIdleCallback||(cb=>setTimeout(cb,1500)))(preload,{timeout:3000});
+
 const start=new URLSearchParams(location.search).get("app");
 if(start){history.replaceState({},"",location.pathname);history.pushState({app:start},"","?app="+encodeURIComponent(start));openApp(start,false)}
 </script>

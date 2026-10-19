@@ -1,5 +1,6 @@
 // Effestudio HUB: guscio in cache, il resto sempre dalla rete
-const CACHE = 'hub-v3';
+const CACHE = 'hub-v5';
+const SCOPE = '/effestudio-hub/';
 const SHELL = ['./', 'index.html', 'apps.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
 self.addEventListener('install', e => {
@@ -10,13 +11,14 @@ self.addEventListener('activate', e => {
     .then(keys => Promise.all(keys.filter(k => k.startsWith('hub-') && k !== CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
+// cache prima (apertura istantanea), aggiornamento in background
 self.addEventListener('fetch', e => {
   const req = e.request;
   const url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== self.location.origin || !url.pathname.startsWith('/effestudio-hub/')) return;
-  e.respondWith(fetch(req).then(res => {
-    const copy = res.clone();
-    caches.open(CACHE).then(c => c.put(req, copy));
-    return res;
-  }).catch(() => caches.match(req).then(r => r || caches.match('index.html'))));
+  if (req.method !== 'GET' || url.origin !== self.location.origin || !url.pathname.startsWith(SCOPE)) return;
+  e.respondWith(caches.open(CACHE).then(async c => {
+    const hit = await c.match(req, { ignoreSearch: true });
+    const net = fetch(req).then(res => { if (res && res.ok) c.put(req, res.clone()); return res; }).catch(() => hit);
+    return hit || net;
+  }));
 });

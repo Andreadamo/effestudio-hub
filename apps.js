@@ -15,11 +15,18 @@ window.HUB_APPS = [
 
   { id: "effeore-admin", area: "admin", mode: "inside", name: "EffeOre Amministrazione", sub: "Compensi ed export commercialista",
     url: "https://andreadamo.github.io/effeore/dashboard.html", icon: "euro" },
-  { id: "contabilita", area: "admin", mode: "browser", name: "Contabilità", sub: "Console · account Effestudio",
-    url: "https://script.google.com/macros/s/AKfycbxXHMeAPztpOm2cUiYPC4SmRtXepK9goecd_lvw27c0al1N_DA5pVBXdF5MeltWnPfaZQ/exec", icon: "ledger" },
+  { id: "contabilita", area: "admin", mode: "inside", name: "Contabilità", sub: "Console entrate, uscite, compensi",
+    url: "https://andreadamo.github.io/effestudio-contabilita/", icon: "ledger" },
   { id: "orari", area: "admin", mode: "inside", name: "Orari Trainer", sub: "Turni e assenze",
     url: "https://andreadamo.github.io/effestudio-orari/", icon: "calendar" }
 ];
 
 // Verifica PIN amministrazione: usa lo stesso PIN amministrazione di EffeOre (controllo sul server)
 window.HUB_ADMIN_API = "https://script.google.com/macros/s/AKfycby2-JgsaMQVF-f3jEAjULepaHx2EhQhhxUeUtY5adDkFz63BIuW3EhFmQUvoFMmrmZfGw/exec";
+
+// Ping leggeri all'apertura dell'HUB per "svegliare" i server Google (max 1 volta ogni 4 minuti)
+window.HUB_WARM = [
+  { url: window.HUB_ADMIN_API, fn: "api_adminCheck", args: [""] },
+  { url: "https://script.google.com/macros/s/AKfycbzgTEpdtI1jabH6RbtaIIKm_VOCNylglYhjlqejuFf-t4uKW4h-4GRA3Rgyh0idkbf3/exec", fn: "api_catalogo" },
+  { url: "https://script.google.com/macros/s/AKfycbw5F0wFet3LpyKTK3vWePLv9x3NWueH6OQAeRC4oe17y-_BIg8tezo1nneyVL6P1C1DqA/exec", fn: "api_check" }
+];
