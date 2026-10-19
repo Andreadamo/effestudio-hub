@@ -17,8 +17,8 @@ window.HUB_APPS = [
     url: "https://andreadamo.github.io/effeore/dashboard.html", icon: "euro" },
   { id: "contabilita", area: "admin", mode: "browser", name: "Contabilità", sub: "Console · account Effestudio",
     url: "https://script.google.com/macros/s/AKfycbxXHMeAPztpOm2cUiYPC4SmRtXepK9goecd_lvw27c0al1N_DA5pVBXdF5MeltWnPfaZQ/exec", icon: "ledger" },
-  { id: "orari", area: "admin", mode: "browser", name: "Orari Trainer", sub: "Turni e assenze",
-    url: "https://script.google.com/macros/s/AKfycbw5F0wFet3LpyKTK3vWePLv9x3NWueH6OQAeRC4oe17y-_BIg8tezo1nneyVL6P1C1DqA/exec", icon: "calendar" }
+  { id: "orari", area: "admin", mode: "inside", name: "Orari Trainer", sub: "Turni e assenze",
+    url: "https://andreadamo.github.io/effestudio-orari/", icon: "calendar" }
 ];
 
 // Verifica PIN amministrazione: usa lo stesso PIN amministrazione di EffeOre (controllo sul server)
