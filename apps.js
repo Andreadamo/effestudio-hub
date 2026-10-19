@@ -6,7 +6,7 @@ window.HUB_APPS = [
     url: "https://andreadamo.github.io/effeore/", icon: "clock" },
   { id: "merch-staff", area: "staff", mode: "inside", name: "Merch Staff", sub: "Scanner, prenotazioni, etichette",
     url: "https://andreadamo.github.io/effestudio-merch/staff.html", icon: "scan" },
-  { id: "merch-dash", area: "staff", mode: "inside", name: "Dashboard Merch", sub: "Incassi e magazzino",
+  { id: "merch-dash", area: "admin", mode: "inside", name: "Dashboard Merch", sub: "Incassi e magazzino",
     url: "https://andreadamo.github.io/effestudio-merch/dashboard.html", icon: "chart" },
   { id: "merch-cat", area: "staff", mode: "inside", name: "Catalogo Merch", sub: "Pagina prenotazione clienti",
     url: "https://andreadamo.github.io/effestudio-merch/", icon: "shirt" },
