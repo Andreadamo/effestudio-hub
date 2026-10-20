@@ -1,7 +1,7 @@
 // Effestudio HUB: guscio in cache, il resto sempre dalla rete
-const CACHE = 'hub-v5';
+const CACHE = 'hub-v6';
 const SCOPE = '/effestudio-hub/';
-const SHELL = ['./', 'index.html', 'apps.js', 'manifest.webmanifest',
+const SHELL = ['./', 'index.html', 'apps.js', 'prezzi.html', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -12,6 +12,8 @@ window.HUB_APPS = [
     url: "https://andreadamo.github.io/effestudio-merch/", icon: "shirt" },
   { id: "merch-guida", area: "staff", mode: "inside", name: "Guida Merch", sub: "Vendita e incasso",
     url: "https://andreadamo.github.io/effestudio-merch/staff.html#guida", icon: "book" },
+  { id: "prezzi", area: "staff", mode: "inside", name: "Prezziario", sub: "Listino servizi e promo",
+    url: "prezzi.html", icon: "tag" },
 
   { id: "effeore-admin", area: "admin", mode: "inside", name: "EffeOre Amministrazione", sub: "Compensi ed export commercialista",
     url: "https://andreadamo.github.io/effeore/dashboard.html", icon: "euro" },
