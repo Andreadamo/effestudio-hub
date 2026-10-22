@@ -1,5 +1,5 @@
 // Effestudio HUB: guscio in cache, il resto sempre dalla rete
-const CACHE = 'hub-v6';
+const CACHE = 'hub-v7';
 const SCOPE = '/effestudio-hub/';
 const SHELL = ['./', 'index.html', 'apps.js', 'prezzi.html', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];

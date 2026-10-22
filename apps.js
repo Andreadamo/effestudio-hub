@@ -17,6 +17,8 @@ window.HUB_APPS = [
 
   { id: "effeore-admin", area: "admin", mode: "inside", name: "EffeOre Amministrazione", sub: "Compensi ed export commercialista",
     url: "https://andreadamo.github.io/effeore/dashboard.html", icon: "euro" },
+  { id: "incasso", area: "admin", mode: "inside", name: "Nuovo incasso", sub: "Registra pagamenti da telefono",
+    url: "https://andreadamo.github.io/effestudio-contabilita/incasso.html", icon: "euro" },
   { id: "contabilita", area: "admin", mode: "inside", name: "Contabilità", sub: "Console entrate, uscite, compensi",
     url: "https://andreadamo.github.io/effestudio-contabilita/", icon: "ledger" },
   { id: "orari", area: "admin", mode: "inside", name: "Orari Trainer", sub: "Turni e assenze",
