@@ -56,6 +56,13 @@ h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 .admin-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .lnk{background:none;border:1px solid var(--line);border-radius:var(--r);padding:9px 14px;font-weight:600;cursor:pointer;background:var(--surface)}
 .muted{color:var(--muted);font-size:13px}
+/* aggiornamenti */
+.upd{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid var(--fg);border-radius:var(--r);padding:12px 14px}
+.upd b{font-family:var(--display);font-size:15px;display:block}
+.upd span{color:var(--muted);font-size:13px}
+.upd .primary{flex:none;padding:10px 16px}
+.tile .dot{position:absolute;top:12px;right:12px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--accent);color:var(--accent-fg);text-transform:uppercase;letter-spacing:.04em}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--ok-soft);color:var(--ok);text-transform:uppercase;letter-spacing:.04em}
 
 /* app aperta */
@@ -93,12 +100,14 @@ img{max-width:100%}
 <div id="home">
   <div class="wrap">
     <div class="brand"><img src="icons/icon-192.png" alt=""><div><h1>Effestudio HUB</h1><small>Tutte le app Effestudio in un posto</small></div></div>
+    <div class="upd" id="upd" hidden><div><b id="upd-t">Aggiornamenti disponibili</b><span id="upd-s"></span></div><button class="primary" id="b-upd">Aggiorna</button></div>
     <section><h2>Staff</h2><div class="grid" id="g-staff"></div></section>
     <section id="s-admin" hidden><h2>Amministrazione</h2><div class="grid" id="g-admin"></div></section>
     <div class="admin-bar">
       <span class="muted" id="adm-state">Ogni app chiede il suo accesso come sempre.</span>
       <button class="lnk" id="b-admin">🔒 Amministrazione</button>
     </div>
+    <div class="foot"><span class="muted" id="upd-state"></span><button class="lnk" id="b-check">Controlla aggiornamenti</button></div>
     <p class="muted" id="install-hint">Installa l'HUB sul telefono: Android → Chrome → menu ⋮ → Installa app · iPhone → Safari → Condividi → Aggiungi alla schermata Home.</p>
   </div>
 </div>
@@ -136,9 +145,10 @@ const ICONS={
 const svg=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]||ICONS.book}</svg>`;
 const APPS=window.HUB_APPS||[];
 const isAdmin=()=>load("hub-admin")==="1";
+let UPD_IDS=new Set();
 
 /* ---------- home ---------- */
-function tile(a){return `<button class="tile" data-id="${esc(a.id)}">${a.mode==="browser"?'<i class="ext">↗ browser</i>':""}<div class="ic">${svg(a.icon)}</div><b>${esc(a.name)}</b><span>${esc(a.sub)}</span></button>`}
+function tile(a){return `<button class="tile" data-id="${esc(a.id)}">${a.mode==="browser"?'<i class="ext">↗ browser</i>':""}${UPD_IDS.has(a.id)?'<i class="dot">Nuova versione</i>':""}<div class="ic">${svg(a.icon)}</div><b>${esc(a.name)}</b><span>${esc(a.sub)}</span></button>`}
 function renderHome(){
   $("g-staff").innerHTML=APPS.filter(a=>a.area==="staff").map(tile).join("");
   const adm=isAdmin();
@@ -196,8 +206,65 @@ $("b-reload").onclick=()=>{if(cur&&frames[cur.id])frames[cur.id].src=cur.url};
 $("b-ext").onclick=()=>{if(cur)window.open(cur.url,"_blank","noopener")};
 window.onpopstate=e=>{const id=e.state&&e.state.app;if(id)openApp(id,false);else goHome(false)};
 
+/* ---------- aggiornamenti: HUB e app con versione in cache (EffeOre, Merch) ---------- */
+// Ogni app ha la sua versione nel proprio sw.js (const CACHE = '...'). Se quella online è diversa
+// da quella salvata sul telefono, l'app ha un aggiornamento: il tasto aggiorna solo quelle.
+const SOURCES=[
+  {key:"hub",name:"HUB",url:new URL("./",location.href).href,prefix:"hub-"},
+  {key:"effeore",name:"EffeOre",url:"https://andreadamo.github.io/effeore/",prefix:"effeore-"},
+  {key:"merch",name:"Merch",url:"https://andreadamo.github.io/effestudio-merch/",prefix:"merch-"}
+].filter(x=>new URL(x.url).origin===location.origin);
+const appsOf=src=>APPS.filter(a=>new URL(a.url,location.href).href.startsWith(src.url)).map(a=>a.id);
+let pending=[],hubReady=false,lastCheck=0,busy=false;
+const hadSW="serviceWorker" in navigator&&!!navigator.serviceWorker.controller;
+async function onlineVer(src){
+  const t=await fetch(src.url+"sw.js",{cache:"no-store"}).then(r=>r.ok?r.text():"");
+  return (t.match(/const CACHE\s*=\s*'([^']+)'/)||[])[1]||"";
+}
+async function checkUpdates(force){
+  if(busy||!("caches" in window)||!("serviceWorker" in navigator))return;
+  if(!force&&Date.now()-lastCheck<60000)return;lastCheck=Date.now();
+  if(force)$("upd-state").textContent="Controllo…";
+  const keys=await caches.keys().catch(()=>[]);
+  const res=await Promise.all(SOURCES.map(async src=>{
+    try{const v=await onlineVer(src);if(!v)return null;
+      const mine=keys.filter(k=>k.startsWith(src.prefix));
+      return mine.length&&!mine.includes(v)?Object.assign({ver:v},src):null}catch(e){return null}
+  }));
+  pending=res.filter(Boolean);renderUpd();
+}
+function renderUpd(){
+  const names=pending.map(p=>p.name);if(hubReady&&!names.includes("HUB"))names.unshift("HUB");
+  UPD_IDS=new Set(pending.flatMap(appsOf));
+  $("upd").hidden=!names.length;
+  $("upd-t").textContent=names.length===1?"Aggiornamento disponibile":"Aggiornamenti disponibili";
+  $("upd-s").textContent=names.join(" · ");
+  $("upd-state").textContent=names.length?"":"✓ Tutto aggiornato";
+  renderHome();
+}
+async function doUpdate(){
+  if(busy)return;busy=true;const b=$("b-upd");b.disabled=true;b.textContent="Aggiorno…";
+  let reloadHub=hubReady;
+  for(const p of pending){
+    try{
+      const reg=await navigator.serviceWorker.getRegistration(p.url);
+      if(reg){await reg.update();for(let i=0;i<60&&!(await caches.has(p.ver));i++)await new Promise(z=>setTimeout(z,250))}
+      else{const ks=await caches.keys();await Promise.all(ks.filter(k=>k.startsWith(p.prefix)).map(k=>caches.delete(k)))}
+    }catch(e){}
+    if(p.key==="hub")reloadHub=true;
+    appsOf(p).forEach(id=>{if(frames[id]){frames[id].remove();delete frames[id]}});
+  }
+  if(reloadHub){location.reload();return}
+  pending=[];busy=false;b.disabled=false;b.textContent="Aggiorna";renderUpd();preload();
+}
+$("b-upd").onclick=doUpdate;
+$("b-check").onclick=()=>checkUpdates(true);
+
 /* ---------- avvio ---------- */
-if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{if(hadSW){hubReady=true;renderUpd()}});
+}
 renderHome();
 
 /* ---------- velocità: risveglia i server Google e prepara le app più usate ---------- */
@@ -222,6 +289,8 @@ function preload(){
   });
 }
 (window.requestIdleCallback||(cb=>setTimeout(cb,1500)))(preload,{timeout:3000});
+setTimeout(()=>checkUpdates(true),2000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&!$("home").hidden)checkUpdates(false)});
 
 const start=new URLSearchParams(location.search).get("app");
 if(start){history.replaceState({},"",location.pathname);history.pushState({app:start},"","?app="+encodeURIComponent(start));openApp(start,false)}
