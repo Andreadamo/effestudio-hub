@@ -248,8 +248,9 @@ async function doUpdate(){
   for(const p of pending){
     try{
       const reg=await navigator.serviceWorker.getRegistration(p.url);
-      if(reg){await reg.update();for(let i=0;i<60&&!(await caches.has(p.ver));i++)await new Promise(z=>setTimeout(z,250))}
-      else{const ks=await caches.keys();await Promise.all(ks.filter(k=>k.startsWith(p.prefix)).map(k=>caches.delete(k)))}
+      if(reg){await reg.update();for(let i=0;i<40&&!(await caches.has(p.ver));i++)await new Promise(z=>setTimeout(z,250))}
+      // versione vecchia ancora in cache (o nessun service worker): la svuoto, l'app si ricarica dalla rete
+      if(!(await caches.has(p.ver))){const ks=await caches.keys();await Promise.all(ks.filter(k=>k.startsWith(p.prefix)).map(k=>caches.delete(k)))}
     }catch(e){}
     if(p.key==="hub")reloadHub=true;
     appsOf(p).forEach(id=>{if(frames[id]){frames[id].remove();delete frames[id]}});
