@@ -21,6 +21,8 @@ window.HUB_APPS = [
     url: "https://andreadamo.github.io/effestudio-contabilita/incasso.html", icon: "euro" },
   { id: "contabilita", area: "admin", mode: "inside", name: "Contabilità", sub: "Console entrate, uscite, compensi",
     url: "https://andreadamo.github.io/effestudio-contabilita/", icon: "ledger" },
+  { id: "cassa", area: "admin", mode: "inside", name: "Cassa 12 mesi", sub: "Liquidità, scadenze, allerta art. 3",
+    url: "https://andreadamo.github.io/effestudio-contabilita/cassa.html", icon: "trend" },
   { id: "orari", area: "admin", mode: "inside", name: "Orari Trainer", sub: "Turni e assenze",
     url: "https://andreadamo.github.io/effestudio-orari/", icon: "calendar" }
 ];
