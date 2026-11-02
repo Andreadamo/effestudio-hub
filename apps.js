@@ -14,6 +14,8 @@ window.HUB_APPS = [
     url: "https://andreadamo.github.io/effestudio-merch/staff.html#guida", icon: "book" },
   { id: "prezzi", area: "staff", mode: "inside", name: "Prezziario", sub: "Listino servizi e promo",
     url: "prezzi.html", icon: "tag" },
+  { id: "pulizie", area: "staff", mode: "inside", name: "Check Pulizie", sub: "I tuoi compiti di oggi",
+    url: "pulizie/staff.html", icon: "broom" },
 
   { id: "effeore-admin", area: "admin", mode: "inside", name: "EffeOre Amministrazione", sub: "Compensi ed export commercialista",
     url: "https://andreadamo.github.io/effeore/dashboard.html", icon: "euro" },
@@ -24,7 +26,9 @@ window.HUB_APPS = [
   { id: "cassa", area: "admin", mode: "inside", name: "Cassa 12 mesi", sub: "Liquidità, scadenze, allerta art. 3",
     url: "https://andreadamo.github.io/effestudio-contabilita/cassa.html", icon: "trend" },
   { id: "orari", area: "admin", mode: "inside", name: "Orari Trainer", sub: "Turni e assenze",
-    url: "https://andreadamo.github.io/effestudio-orari/", icon: "calendar" }
+    url: "https://andreadamo.github.io/effestudio-orari/", icon: "calendar" },
+  { id: "pulizie-admin", area: "admin", mode: "inside", name: "Monitoraggio Pulizie", sub: "Chi ha pulito, chi ha controllato, multe",
+    url: "pulizie/", icon: "broom" }
 ];
 
 // Verifica PIN amministrazione: usa lo stesso PIN amministrazione di EffeOre (controllo sul server)

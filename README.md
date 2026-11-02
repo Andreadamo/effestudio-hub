@@ -17,3 +17,10 @@ Aggiungere un'app: una riga in `apps.js`.
 - In home l'HUB confronta la versione online con quella salvata sul telefono e mostra "Aggiorna" solo per le app cambiate.
 - EffeOre e Merch Staff installate da sole mostrano lo stesso avviso con il tasto "Aggiorna".
 - Orari Trainer e Contabilità non hanno cache: sono sempre all'ultima versione.
+
+## Monitoraggio Pulizie (`pulizie/`)
+- `pulizie/staff.html` → **Check Pulizie** (Staff): checklist incaricato del giorno, controllo di chi apre/chiude, avviso push il giorno prima.
+- `pulizie/` → **Monitoraggio Pulizie** (Amministrazione, PIN pulizie): dettaglio giorno, calendario, registro, multe (decurtate dal compenso), impostazioni e giorni impresa.
+- Turni calcolati dagli Orari Trainer (sede Cecina Center): apertura = primo turno, chiusura = ultimo, incaricato a rotazione tra chi è in sede.
+- Dati: Supabase progetto `spring-league`, schema `pulizie` (accesso solo via funzioni `pul_*`, vedi `pulizie/supabase/schema.sql`).
+- Avviso: edge function `pulizie-avviso`, lanciata da pg_cron alle 17:00 UTC (18:00 inverno / 19:00 estate).

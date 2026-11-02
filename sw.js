@@ -1,5 +1,5 @@
 // Effestudio HUB: guscio in cache, il resto sempre dalla rete
-const CACHE = 'hub-v10';
+const CACHE = 'hub-v11';
 const SCOPE = '/effestudio-hub/';
 const SHELL = ['./', 'index.html', 'apps.js', 'prezzi.html', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
@@ -20,5 +20,23 @@ self.addEventListener('fetch', e => {
     const hit = await c.match(req, { ignoreSearch: true });
     const net = fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then(res => { if (res && res.ok) c.put(req, res.clone()); return res; }).catch(() => hit);
     return hit || net;
+  }));
+});
+
+// Notifiche push (avviso pulizie del giorno prima)
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Effestudio', {
+    body: d.body || '', tag: d.tag || 'effestudio', icon: 'icons/icon-192.png', badge: 'icons/favicon-32.png',
+    data: { url: d.url || SCOPE }
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || SCOPE, self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) if (c.url.startsWith(self.location.origin + SCOPE) && 'focus' in c) { c.navigate(url); return c.focus(); }
+    return self.clients.openWindow(url);
   }));
 });
