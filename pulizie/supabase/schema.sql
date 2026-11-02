@@ -27,16 +27,16 @@ do $$ declare t text; begin
 
 -- ---------- PIN amministrazione (hash) ----------
 create or replace function pulizie.is_admin(p_pin text) returns boolean language plpgsql security definer set search_path = pulizie, extensions as $$
-declare h text; ok boolean;
+declare h text; v_ok boolean;
 begin
-  if (select count(*) from pulizie.admin_try where not ok and ts > now() - interval '10 minutes') >= 10 then
+  if (select count(*) from pulizie.admin_try a where not a.ok and a.ts > now() - interval '10 minutes') >= 10 then
     raise exception 'Troppi tentativi: riprova tra 10 minuti';
   end if;
   select v into h from pulizie.secret where k = 'admin_pin';
-  ok := h is not null and crypt(coalesce(p_pin,''), h) = h;
-  insert into pulizie.admin_try(ok) values (ok);
+  v_ok := h is not null and crypt(coalesce(p_pin,''), h) = h;
+  insert into pulizie.admin_try(ok) values (v_ok);
   delete from pulizie.admin_try where ts < now() - interval '1 day';
-  return ok;
+  return v_ok;
 end $$;
 revoke all on function pulizie.is_admin(text) from public, anon, authenticated;
 
@@ -46,7 +46,8 @@ create or replace function public.pul_load() returns jsonb language sql stable s
     'cfg', coalesce((select data from pulizie.config where id = 1), '{}'::jsonb),
     'impresa', coalesce((select jsonb_agg(to_char(date,'YYYY-MM-DD') order by date) from pulizie.impresa where date > current_date - 120), '[]'::jsonb),
     'logs', coalesce((select jsonb_agg(jsonb_build_object('id',id,'date',to_char(date,'YYYY-MM-DD'),'role',role,'person',person,'items',items,'verify',verify,'sala',sala,'note',note,'ts',ts,'ref',to_char(ref,'YYYY-MM-DD'))) from pulizie.log where date > current_date - 120), '[]'::jsonb),
-    'swaps', coalesce((select jsonb_agg(jsonb_build_object('date',to_char(date,'YYYY-MM-DD'),'role',role,'person',person)) from pulizie.swap where date > current_date - 120), '[]'::jsonb))
+    'swaps', coalesce((select jsonb_agg(jsonb_build_object('date',to_char(date,'YYYY-MM-DD'),'role',role,'person',person)) from pulizie.swap where date > current_date - 120), '[]'::jsonb),
+    'turni', coalesce((select jsonb_agg(jsonb_build_object('date',to_char(date,'YYYY-MM-DD'),'role',role,'person',person)) from pulizie.turni where date between current_date - 1 and current_date + 30), '[]'::jsonb))
 $$;
 
 create or replace function public.pul_save_log(rec jsonb, swaps jsonb default '[]'::jsonb) returns void language plpgsql security definer set search_path = pulizie as $$

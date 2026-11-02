@@ -72,29 +72,36 @@ function shifts(d){return S.slots.filter(s=>slotOn(s,d)).map(s=>{
   const id=a?a.subId:s.trainerId;return id?{name:tName(id),start:s.start,end:s.end}:null}).filter(Boolean)}
 const person=n=>S.cfg.people.find(p=>p.name===n);
 function inRota(n){const p=person(n);return p&&!p.off}
-const CACHE={};
+const CACHE={},TALLY={};
+// giorno lavorativo precedente (>= inizio rotazione) o null
+function prevRot(d){if(!S.cfg.start||d<=S.cfg.start)return null;let x=addDays(d,-1);while(x>=S.cfg.start&&isOff(x))x=addDays(x,-1);return x>=S.cfg.start?x:null}
 function assign(d){
   if(isOff(d)||!S.cfg.start||d<S.cfg.start)return null;
   if(CACHE[d])return CACHE[d];
+  if(!S.slots.length&&S.turniDb){const t=S.turniDb[d];return t?(CACHE[d]={date:d,ape:t.ape||"",chi:t.chi||"",inc:t.inc||"",apeT:"",chiT:"",imp:isImp(d)}):null}
+  // conteggi turni fino al giorno prima (calcolati una volta sola, in ordine)
+  let p=prevRot(d),tl={cnt:{},last:{},idx:-1};
+  if(p){const chain=[];let q=p;while(q&&!TALLY[q]){chain.push(q);q=prevRot(q)}for(let i=chain.length-1;i>=0;i--)assign(chain[i]);tl=TALLY[p]}
+  const idx=tl.idx+1;
   const sh=shifts(d).filter(x=>inRota(x.name));
   const sw=k=>(S.swaps.find(x=>x.date===d&&x.role===k)||{}).person;
   const ape=sw("ape")||(sh.slice().sort((a,b)=>mins(a.start)-mins(b.start))[0]||{}).name||"";
   const chi=sw("chi")||(sh.slice().sort((a,b)=>mins(b.end)-mins(a.end))[0]||{}).name||"";
   // incaricato: tra chi è in palestra quel giorno, chi ha fatto meno turni (poi chi l'ha fatto meno di recente)
   let inc=sw("inc")||"";
-  const ws=workDays(S.cfg.start,d);const idx=ws.indexOf(d);
   const active=S.cfg.freq<2||idx%S.cfg.freq===0;
   if(!inc&&active){
     const here=new Set(sh.map(x=>x.name));S.cfg.people.forEach(p=>{if(p.always&&!p.off)here.add(p.name)});
-    const cnt={},last={};
-    ws.slice(0,idx).forEach(x=>{const a=assign(x);if(a&&a.inc){cnt[a.inc]=(cnt[a.inc]||0)+1;last[a.inc]=x}});
-    const order=S.cfg.people.map(p=>p.name);
+    const order=S.cfg.people.map(p=>p.name),cnt=tl.cnt,last=tl.last;
     const cand=[...here].filter(inRota).sort((a,b)=>(cnt[a]||0)-(cnt[b]||0)||(last[a]||"").localeCompare(last[b]||"")||order.indexOf(a)-order.indexOf(b));
     inc=cand[0]||"";
   }
+  const ninc=active?inc:"",cnt={...tl.cnt},last={...tl.last};if(ninc){cnt[ninc]=(cnt[ninc]||0)+1;last[ninc]=d}
+  TALLY[d]={cnt,last,idx};
   const sOf=n=>sh.find(x=>x.name===n)||{};
-  return CACHE[d]={date:d,ape,chi,inc:active?inc:"",apeT:sOf(ape).start||"",chiT:sOf(chi).end||"",imp:isImp(d)};
+  return CACHE[d]={date:d,ape,chi,inc:ninc,apeT:sOf(ape).start||"",chiT:sOf(chi).end||"",imp:isImp(d)};
 }
+function clearCalc(){for(const k in CACHE)delete CACHE[k];for(const k in TALLY)delete TALLY[k]}
 const itemsInc=d=>isImp(d)?ITEMS.inc_imp:ITEMS.inc_std;
 const logOf=(d,r)=>S.logs.filter(l=>l.date===d&&l.role===r).sort((a,b)=>b.ts.localeCompare(a.ts))[0];
 
@@ -147,6 +154,7 @@ function form(r,d,a,who){
   return h;
 }
 function bindForm(){
+  document.querySelectorAll(".card-b").forEach(b=>{b.addEventListener("input",()=>S.dirty=true);b.addEventListener("click",e=>{if(e.target.closest("[data-v],[data-sala]"))S.dirty=true})});
   document.querySelectorAll(".chk input").forEach(i=>i.onchange=()=>i.parentElement.classList.toggle("on",i.checked));
   document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{b.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b))});
   document.querySelectorAll("[data-sala]").forEach(b=>b.onclick=()=>{b.parentElement.querySelectorAll("[data-sala]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
@@ -161,12 +169,13 @@ async function save(r,box){
   if(Object.keys(verify).length<need){toast("Segna ✓ o ✗ su ogni voce");return}
   const sala=(box.querySelector("[data-sala][aria-pressed=true]")||{}).dataset?.sala||"";
   const who=r==="inc"?a.inc:r==="chi"?a.chi:a.ape;
-  if(who!==S.me){S.swaps=S.swaps.filter(x=>!(x.date===d&&x.role===r));S.swaps.push({date:d,role:r,person:S.me});for(const k in CACHE)delete CACHE[k]}
+  if(who!==S.me){S.swaps=S.swaps.filter(x=>!(x.date===d&&x.role===r));S.swaps.push({date:d,role:r,person:S.me});clearCalc()}
   const rec={id:(logOf(d,r)||{}).id||"l"+Date.now(),date:d,role:r,person:S.me,items,verify,sala,note:box.querySelector(".f-note").value.trim(),ts:new Date().toISOString().slice(0,16).replace("T"," ").replace(" ","T"),ref:r==="ape"?prevWork(d):""};
   rec.ts=d+"T"+pad(new Date().getHours())+":"+pad(new Date().getMinutes());
   S.logs=S.logs.filter(l=>l.id!==rec.id).concat(rec);
-  await db.save("logs",rec);rebuildMulte();S.open=null;S.cover=null;
+  S.dirty=false;rebuildMulte();S.open=null;S.cover=null;
   toast(Object.values(verify).includes("ko")?"Registrato · ✗ segnalato":"Registrato ✓");render();
+  queuePush(rec);
 }
 
 
@@ -283,6 +292,7 @@ function viewSet(){
 /* ---------- render ---------- */
 const TABS=[["oggi","Giorno",'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>'],["cal","Calendario",'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'],["reg","Registro",'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>'],["multe","Multe",'<path d="M17 6.5A7 7 0 1 0 17 17.5M4 10h9M4 14h9"/>'],["set","Impostaz.",'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>']];
 function render(){
+  S.pendingRender=false;S.dirty=false;
   $("demo").hidden=!DEMO;$("b-me").hidden=MODE==="admin";$("b-me").textContent=S.me?"👤 "+first(S.me):"Chi sei?";
   if(window.self!==window.top)document.querySelector("#hdr>div").hidden=true;
   if(MODE==="staff"){document.querySelector(".tabs").hidden=true;$("view").innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">${viewStaff()}</div>`;bind();return}
@@ -312,11 +322,11 @@ function bind(){
   document.querySelectorAll("[data-cover]").forEach(b=>b.onclick=()=>{S.cover=b.dataset.cover;render()});
   bindForm();
 }
-function reset(){for(const k in CACHE)delete CACHE[k];rebuildMulte()}
+function reset(){clearCalc();rebuildMulte()}
 function toast(t){const e=$("toast");e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2200)}
 function pickMe(){
   $("dlgBody").innerHTML=`<h3>Chi sei?</h3><select id="me-s"><option value="">— scegli —</option>${S.cfg.people.map(p=>`<option ${p.name===S.me?"selected":""}>${esc(p.name)}</option>`).join("")}</select><button class="primary" id="me-ok">Conferma</button>`;
-  $("dlg").showModal();$("me-ok").onclick=()=>{S.me=$("me-s").value;ls.set("pul-me",S.me||null);$("dlg").close();S.open=null;render()};
+  $("dlg").showModal();$("me-ok").onclick=()=>{S.me=$("me-s").value;ls.set("pul-me",S.me||null);$("dlg").close();S.open=null;S.dirty=false;render()};
 }
 $("b-me").onclick=pickMe;
 
@@ -328,31 +338,49 @@ async function rpc(fn,args){
 const db={
   async save(t,row){if(DEMO)return;
     try{
-      if(t==="logs")await rpc("pul_save_log",{rec:row,swaps:S.swaps.filter(x=>x.date===row.date)});
-      else if(t==="multe")await rpc("pul_admin_save",{p_pin:pin(),kind:"multa",payload:{key:row.key,date:row.date,person:row.person,motivo:row.motivo,importo:row.importo,stato:row.stato}});
+      if(t==="multe")await rpc("pul_admin_save",{p_pin:pin(),kind:"multa",payload:{key:row.key,date:row.date,person:row.person,motivo:row.motivo,importo:row.importo,stato:row.stato}});
       else if(t==="impresa")await rpc("pul_admin_save",{p_pin:pin(),kind:"impresa_add",payload:row});
       else if(t==="config")await rpc("pul_admin_save",{p_pin:pin(),kind:"config",payload:row});
       syncTurni();
     }catch(e){toast("Non salvato: "+e.message);throw e}},
   async del(t,id){if(DEMO)return;if(t==="impresa"){await rpc("pul_admin_save",{p_pin:pin(),kind:"impresa_del",payload:{date:id}});syncTurni()}}
 };
+const lsj={get:k=>{try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+function applyOrari(d){S.trainers=d.trainers||[];S.slots=(d.slots||[]).map(s=>({...s,day:Number(s.day)}));S.absences=(d.absences||[]).map(a=>({...a,allDay:a.allDay!=="FALSE"&&a.allDay!==false}))}
 async function loadOrari(){
-  try{const r=await fetch(CFG.ORARI_API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn:"api_load",args:[]}),redirect:"follow",cache:"no-store"});
-    const j=await r.json();if(j.ok===false)throw new Error(j.error);const d=j.data||j;
-    S.trainers=d.trainers||[];S.slots=(d.slots||[]).map(s=>({...s,day:Number(s.day)}));S.absences=(d.absences||[]).map(a=>({...a,allDay:a.allDay!=="FALSE"&&a.allDay!==false}));
-    try{localStorage.setItem("pul-orari",JSON.stringify({trainers:S.trainers,slots:S.slots,absences:S.absences}))}catch(e){}
-  }catch(e){
-    try{const c=JSON.parse(localStorage.getItem("pul-orari")||"null");if(c){Object.assign(S,c);return}}catch(_){}
-    toast("Orari Trainer non raggiungibili");
-  }
+  const r=await fetch(CFG.ORARI_API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({fn:"api_load",args:[]}),redirect:"follow",cache:"no-store"});
+  const j=await r.json();if(j.ok===false)throw new Error(j.error);const d=j.data||j;
+  applyOrari(d);lsj.set("pul-orari",{trainers:S.trainers,slots:S.slots,absences:S.absences,at:Date.now()});
 }
-async function loadAll(){
-  const [d]=await Promise.all([rpc("pul_load"),loadOrari()]);
+function applyLoad(d){
   if(d.cfg&&d.cfg.people)S.cfg=Object.assign(S.cfg,d.cfg);
-  S.impresa=d.impresa||[];S.logs=(d.logs||[]).map(l=>({...l,ts:l.ts||"",ref:l.ref||""}));S.swaps=d.swaps||[];
-  if(MODE==="admin"&&pin()){try{const a=await rpc("pul_admin_load",{p_pin:pin()});S.admin=true;S.multe=(a.multe||[]).map(m=>({...m,importo:Number(m.importo),manual:m.stato!=="da confermare"}));S.pushOn=a.push||[]}catch(e){S.admin=false;ls.set("pul-pin",null)}}
-  reset();syncTurni();
+  S.impresa=d.impresa||[];S.swaps=d.swaps||[];
+  const mine=(lsj.get("pul-queue")||[]);// registrazioni non ancora inviate restano visibili
+  S.logs=(d.logs||[]).map(l=>({...l,ts:l.ts||"",ref:l.ref||""})).filter(l=>!mine.some(q=>q.rec.id===l.id)).concat(mine.map(q=>q.rec));
+  if(d.turni){S.turniDb={};d.turni.forEach(t=>{(S.turniDb[t.date]=S.turniDb[t.date]||{})[t.role]=t.person||""})}
 }
+// 1) dati salvati sul telefono → schermata subito  2) dati freschi in sottofondo
+function fromCache(){const d=lsj.get("pul-data"),o=lsj.get("pul-orari");if(!d)return false;applyLoad(d);if(o)applyOrari(o);reset();return true}
+async function loadAll(){
+  const orari=loadOrari().catch(()=>{if(!S.slots.length)toast("Orari Trainer non raggiungibili")});
+  const d=await rpc("pul_load");lsj.set("pul-data",d);applyLoad(d);
+  if(MODE==="admin"&&pin()){try{const a=await rpc("pul_admin_load",{p_pin:pin()});S.admin=true;S.multe=(a.multe||[]).map(m=>({...m,importo:Number(m.importo),manual:m.stato!=="da confermare"}));S.pushOn=a.push||[]}catch(e){S.admin=false;ls.set("pul-pin",null)}}
+  reset();softRender();
+  await orari;reset();softRender();syncTurni();
+}
+// non ridisegna mentre qualcuno sta compilando una checklist
+function softRender(){if(S.dirty||document.querySelector("dialog[open]")){S.pendingRender=true;return}render()}
+/* ---------- coda invii (registrazione mai persa, anche senza rete) ---------- */
+function queuePush(rec){const q=(lsj.get("pul-queue")||[]).filter(x=>x.rec.id!==rec.id);q.push({rec,swaps:S.swaps.filter(x=>x.date===rec.date)});lsj.set("pul-queue",q);flushQueue()}
+let flushing=false;
+async function flushQueue(){
+  if(DEMO||flushing)return;const q=lsj.get("pul-queue")||[];if(!q.length)return;flushing=true;
+  try{for(const it of q){await rpc("pul_save_log",{rec:it.rec,swaps:it.swaps});lsj.set("pul-queue",(lsj.get("pul-queue")||[]).filter(x=>x.rec.id!==it.rec.id))}syncTurni()}
+  catch(e){toast("Salvato sul telefono: lo invio appena c'è rete")}
+  finally{flushing=false}
+}
+addEventListener("online",flushQueue);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){flushQueue();if(!DEMO&&Date.now()-(S.loadedAt||0)>5*60*1000){S.loadedAt=Date.now();loadAll().catch(()=>{})}}});
 // calendario dei prossimi 21 giorni su Supabase (serve all'avviso del giorno prima)
 let syncT=0;function syncTurni(){if(DEMO||!S.slots.length)return;clearTimeout(syncT);syncT=setTimeout(()=>{
   const rows=[];for(let d=today();d<=addDays(today(),21);d=addDays(d,1)){const a=assign(d);if(a)["inc","chi","ape"].forEach(r=>rows.push({date:d,role:r,person:a[r]||"",imp:!!a.imp}))}
@@ -393,8 +421,13 @@ function pushBox(){
 }
 
 (async()=>{
-  if(DEMO)demoData();else{try{await loadAll()}catch(e){toast("Errore caricamento: "+e.message)}}
-  render();
+  if(DEMO){demoData();render()}
+  else{
+    const cached=fromCache();if(cached)render();
+    S.loadedAt=Date.now();
+    try{await loadAll()}catch(e){toast(cached?"Offline: dati dell'ultima apertura":"Errore caricamento: "+e.message)}
+    if(!cached)render();flushQueue();
+  }
   if(MODE==="admin"&&!S.admin&&!DEMO)askPin();
   else if(!S.me&&MODE==="staff")setTimeout(pickMe,300);
 })();
