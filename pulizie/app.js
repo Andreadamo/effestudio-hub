@@ -69,7 +69,8 @@ const tName=id=>(S.trainers.find(t=>t.id===id)||{}).name||"";
 function slotOn(s,d){return !s.deleted&&Number(s.day)===dow(d)&&(!s.validFrom||s.validFrom<=d)&&(!s.validTo||d<=s.validTo)&&(!CFG.SEDE||!s.site||s.site===CFG.SEDE)}
 function shifts(d){return S.slots.filter(s=>slotOn(s,d)).map(s=>{
   const a=S.absences.find(x=>!x.deleted&&x.trainerId===s.trainerId&&x.from<=d&&d<=x.to&&(x.allDay!==false&&x.allDay!=="FALSE"||(mins(x.start)<mins(s.end)&&mins(s.start)<mins(x.end))));
-  const id=a?a.subId:s.trainerId;return id?{name:tName(id),start:s.start,end:s.end}:null}).filter(Boolean)}
+  const id=a?a.subId:s.trainerId;return id?{name:tName(id),start:s.start,end:s.end}:null}).filter(Boolean)
+  .concat((S.cfg.fisse||[]).filter(f=>f.days&&f.days.includes(dow(d))&&f.start).map(f=>({name:f.name,start:f.start,end:f.start,fissa:1})))}
 const person=n=>S.cfg.people.find(p=>p.name===n);
 function inRota(n){const p=person(n);return p&&!p.off}
 const CACHE={},TALLY={};
@@ -90,7 +91,7 @@ function assign(d){
   const sw=k=>(S.swaps.find(x=>x.date===d&&x.role===k)||{}).person;
   const names=f=>[...new Set(sh.filter(f).map(x=>x.name))];
   // controllo serale: a rotazione tra chi è in sede la sera (turno che finisce dopo le 19:30)
-  let ev=names(x=>mins(x.end)>=mins(S.cfg.sera||"19:30"));if(!ev.length)ev=names(x=>mins(x.end)===Math.max(...sh.map(y=>mins(y.end))));
+  let ev=names(x=>!x.fissa&&mins(x.end)>=mins(S.cfg.sera||"19:30"));if(!ev.length)ev=names(x=>!x.fissa&&mins(x.end)===Math.max(...sh.filter(y=>!y.fissa).map(y=>mins(y.end))));
   const chi=sw("chi")||pick(ev,tl.chi);
   // apertura: a rotazione tra chi inizia entro le 10:00, mai chi ha chiuso la sera prima (non controlla sé stesso)
   let mo=names(x=>mins(x.start)<=mins(S.cfg.mattina||"10:00"));if(!mo.length)mo=names(x=>mins(x.start)===Math.min(...sh.map(y=>mins(y.start))));
@@ -107,7 +108,7 @@ function assign(d){
   const ninc=active?inc:"";
   TALLY[d]={inc:bump(tl.inc,ninc,d),ape:bump(tl.ape,ape,d),chi:bump(tl.chi,chi,d),idx};
   const sOf=n=>sh.filter(x=>x.name===n);
-  return CACHE[d]={date:d,ape,chi,inc:ninc,apeT:(sOf(ape).map(x=>x.start).sort()[0])||"",chiT:(sOf(chi).map(x=>x.end).sort().pop())||"",imp:isImp(d)};
+  return CACHE[d]={date:d,ape,chi,inc:ninc,apeT:(sOf(ape).map(x=>x.start).sort()[0])||"",chiT:(sOf(chi).filter(x=>!x.fissa).map(x=>x.end).sort().pop())||"",imp:isImp(d)};
 }
 function clearCalc(){for(const k in CACHE)delete CACHE[k];for(const k in TALLY)delete TALLY[k]}
 const itemsInc=d=>isImp(d)?ITEMS.inc_imp:ITEMS.inc_std;
@@ -156,12 +157,12 @@ function viewOggi(){
 function form(r,d,a,who){
   const l=logOf(d,r)||{},it=l.items||{},vf=l.verify||{};
   const chk=list=>list.map(([k,t])=>`<label class="chk ${it[k]?"on":""}"><input type="checkbox" data-k="${k}" ${it[k]?"checked":""}>${esc(t)}</label>`).join("");
-  const fotoBtn=(k,req)=>`<label class="foto ${req?"req":""}" data-fk="${k}" ${req&&vf[k]!=="ko"?"hidden":""}><input type="file" accept="image/*" capture="environment" hidden><span>📷 ${req?"Foto obbligatoria":"Aggiungi foto (facoltativa)"}</span><img alt="" hidden></label>`;
+  const fotoBtn=(k,onKo)=>{const ob=onKo&&S.cfg.fotoObbl;return`<label class="foto ${onKo?"req":""}" data-fk="${k}" ${onKo&&vf[k]!=="ko"?"hidden":""}><input type="file" accept="image/*" capture="environment" hidden><span>📷 ${ob?"Foto obbligatoria":onKo?"Foto consigliata":"Aggiungi foto (facoltativa)"}</span><img alt="" hidden></label>`};
   const ver=(list,title,ref)=>`<div class="lbl">${title}</div>`+list.map(([k,t])=>`<div class="ver"><span class="l">${esc(t)}</span><div class="seg"><button class="ok" data-v="${k}" data-val="ok" aria-pressed="${vf[k]==="ok"}" aria-label="Fatto">✓</button><button class="ko" data-v="${k}" data-val="ko" aria-pressed="${vf[k]==="ko"}" aria-label="Non fatto">✗</button></div></div>${fotoBtn(k,1)}`).join("")+(ref?`<span class="note">${ref}</span>`:"");
   let h="";
   if(r==="inc"){const late=d===today()&&nowHM()>(S.cfg.deadline||"18:00");h+=`<div class="alert ${late?"ko":"info"}">${late?"Scadenza delle "+esc(S.cfg.deadline||"18:00")+" passata: registra comunque, risulterà in ritardo.":"Da registrare entro le "+esc(S.cfg.deadline||"18:00")+"."}</div>`;h+=chk(itemsInc(d));if(!a.imp)h+=fotoBtn("bagno",0);if(!a.imp)h+=`<div class="lbl">Sala</div><div class="radio">${SALA.map(([k,t])=>`<button data-sala="${k}" aria-pressed="${l.sala===k}">${t}</button>`).join("")}</div>`}
-  if(r==="chi"){h+=ver(itemsInc(d),"Verifica incaricato · "+esc(first(a.inc)||"—"),"✗ = non fatto → foto obbligatoria e multa all'incaricato");h+=`<div class="lbl">Chiusura</div>`+chk(ITEMS.chi)}
-  if(r==="ape"){const p=prevWork(d),pa=assign(p)||{};h+=ver(ITEMS.ape,"Verifica chiusura di "+fmtS(p)+" · "+esc(first(pa.chi)||"—"),"✗ = non fatto → foto obbligatoria e multa a chi ha fatto il controllo serale")}
+  if(r==="chi"){h+=ver(itemsInc(d),"Verifica incaricato · "+esc(first(a.inc)||"—"),"✗ = non fatto → "+(S.cfg.fotoObbl?"foto obbligatoria":"foto consigliata")+" e multa all'incaricato");h+=`<div class="lbl">Chiusura</div>`+chk(ITEMS.chi)}
+  if(r==="ape"){const p=prevWork(d),pa=assign(p)||{};h+=ver(ITEMS.ape,"Verifica chiusura di "+fmtS(p)+" · "+esc(first(pa.chi)||"—"),"✗ = non fatto → "+(S.cfg.fotoObbl?"foto obbligatoria":"foto consigliata")+" e multa a chi ha fatto il controllo serale")}
   h+=`<textarea class="f-note" placeholder="Note (cosa manca, cosa hai segnalato…)">${esc(l.note||"")}</textarea>`;
   h+=`<button class="primary f-save" data-r="${r}">${l.id?"Aggiorna registrazione":"Registra"}${who&&S.me&&who!==S.me?" (cambio turno)":""}</button>`;
   if(who&&S.me&&who!==S.me)h+=`<span class="note">Sei registrato come ${esc(S.me)}: il turno passa a te.</span>`;
@@ -185,7 +186,7 @@ async function save(r,box){
   box.querySelectorAll("[data-v][aria-pressed=true]").forEach(b=>verify[b.dataset.v]=b.dataset.val);
   const need=r==="chi"?itemsInc(d).length:r==="ape"?ITEMS.ape.length:0;
   if(Object.keys(verify).length<need){toast("Segna ✓ o ✗ su ogni voce");return}
-  for(const[k,v]of Object.entries(verify))if(v==="ko"){const f=box.querySelector(`.foto[data-fk="${k}"]`);if(!f||!f.dataset.img){toast("Serve la foto per ogni ✗");f&&f.scrollIntoView({block:"center"});return}}
+  if(S.cfg.fotoObbl)for(const[k,v]of Object.entries(verify))if(v==="ko"){const f=box.querySelector(`.foto[data-fk="${k}"]`);if(!f||!f.dataset.img){toast("Serve la foto per ogni ✗");f&&f.scrollIntoView({block:"center"});return}}
   box.querySelectorAll(".foto[data-img]").forEach(f=>{if(!f.hidden)photos.push({key:f.dataset.fk,data:f.dataset.img})});
   const sala=(box.querySelector("[data-sala][aria-pressed=true]")||{}).dataset?.sala||"";
   const who=r==="inc"?a.inc:r==="chi"?a.chi:a.ape,take=who!==S.me;
@@ -311,15 +312,23 @@ function viewSet(){
     <div class="row"><span style="flex:1">Scadenza incaricato</span><input type="time" id="c-dl" value="${esc(S.cfg.deadline||"18:00")}"></div>
     <div class="row"><span style="flex:1">Apertura: chi inizia entro le</span><input type="time" id="c-mat" value="${esc(S.cfg.mattina||"10:00")}"></div>
     <div class="row"><span style="flex:1">Controllo serale: chi finisce dopo le</span><input type="time" id="c-sera" value="${esc(S.cfg.sera||"19:30")}"></div>
+    <div class="row"><span style="flex:1">Foto sui ✗</span><select id="c-foto"><option value="0" ${S.cfg.fotoObbl?"":"selected"}>consigliata</option><option value="1" ${S.cfg.fotoObbl?"selected":""}>obbligatoria</option></select></div>
     <div class="row"><span style="flex:1">Dimenticanze tollerate al mese</span><input type="number" id="c-tol" min="0" max="5" value="${+(S.cfg.tolleranza??1)}" style="width:90px"></div></div>`;
   h+=`<div class="panel"><h3>Persone in rotazione</h3><span class="note">"Sempre in sede" = non dipende dagli Orari Trainer.</span><table><tbody>${S.cfg.people.map((p,i)=>`<tr><td>${esc(p.name)}</td><td><label><input type="checkbox" data-alw="${i}" ${p.always?"checked":""}> sempre in sede</label></td><td><label><input type="checkbox" data-on="${i}" ${p.off?"":"checked"}> attivo</label></td></tr>`).join("")}</tbody></table></div>`;
+  h+=`<div class="panel"><h3>Presenze fisse (fuori Orari Trainer)</h3><span class="note">Chi è sempre in sede al mattino anche senza turno: conta per apertura e incaricato, non per il controllo serale.</span><table><tbody>${S.cfg.people.map((p,i)=>{const f=(S.cfg.fisse||[]).find(x=>x.name===p.name)||{days:[],start:""};return`<tr><td>${esc(first(p.name))}</td><td><div class="days">${["L","M","M","G","V"].map((g,j)=>`<label><input type="checkbox" data-fd="${i}" value="${j}" ${f.days.includes(j)?"checked":""}>${g}</label>`).join("")}<input type="time" data-ft="${i}" value="${esc(f.start)}" aria-label="Ora di arrivo"></div></td></tr>`}).join("")}</tbody></table></div>`;
   h+=`<button class="primary" id="c-save">Salva impostazioni</button>`;
-  h+=`<div class="panel"><h3>PIN personali</h3><span class="note">Ognuno entra in Check Pulizie con il suo PIN: le registrazioni sono firmate. "Nuovo PIN" scollega i telefoni di quella persona.</span><table><tbody>${S.cfg.people.map(p=>{const x=(S.pins||[]).find(q=>q.person===p.name);return`<tr><td>${esc(p.name)}<span class="s">${x?"PIN impostato il "+esc(x.updated):"nessun PIN"}</span></td><td style="text-align:right"><button class="btn" data-newpin="${esc(p.name)}">Nuovo PIN</button></td></tr>`}).join("")}</tbody></table></div>`;
+  const P=S.pins||{};const req=P.richieste||[];
+  h+=`<div class="panel"><h3>Richieste di accesso ${req.length?`<span class="badge b-ko">${req.length}</span>`:""}</h3>${P.mail===false?'<div class="alert ko">Invio email non ancora attivo: il PIN compare qui e va comunicato a mano.</div>':""}
+    ${req.length?`<table><tbody>${req.map(r=>`<tr><td><b>${esc(r.person)}</b><span class="s">${esc(r.email)} · ${esc(r.quando)}</span></td><td style="text-align:right;white-space:nowrap"><button class="btn" data-appr="${r.id}" data-ok="1">Approva</button> <button class="btn" data-appr="${r.id}" data-ok="0">✕</button></td></tr>`).join("")}</tbody></table>`:'<span class="note">Nessuna richiesta. Lo staff si registra da Check Pulizie → "Primo accesso" con nome ed email; qui approvi e il PIN parte per email.</span>'}</div>`;
+  h+=`<div class="panel"><h3>PIN personali</h3><span class="note">"Nuovo PIN" lo invia all'email registrata e scollega i telefoni di quella persona.</span><table><tbody>${S.cfg.people.map(p=>{const x=(P.pins||[]).find(q=>q.person===p.name);return`<tr><td>${esc(p.name)}<span class="s">${x?(x.email?esc(x.email):"nessuna email")+" · PIN del "+esc(x.updated):"non registrato"}</span></td><td style="text-align:right"><button class="btn" data-newpin="${esc(p.name)}">Nuovo PIN</button></td></tr>`}).join("")}</tbody></table></div>`;
   return h;
 }
 
 
 function confirmBox(b,label){if(b.dataset.arm){delete b.dataset.arm;return true}const t=b.textContent;b.dataset.arm=1;b.textContent=label;setTimeout(()=>{if(b.dataset.arm){delete b.dataset.arm;b.textContent=t}},3000);return false}
+function pinBox(n,r){
+  $("dlgBody").innerHTML=`<h3>PIN di ${esc(first(n))}</h3>${r.inviata?`<div class="alert info">✉️ Inviato a ${esc(r.email)}</div>`:`<div class="alert ko">Email non inviata: comunicalo tu.</div>`}<div style="font:800 40px var(--display);letter-spacing:.2em;text-align:center">${esc(r.pin)}</div><span class="note">Non verrà più mostrato.</span><button class="primary" id="np-ok">Fatto</button>`;
+  $("dlg").showModal();$("np-ok").onclick=()=>{$("dlg").close();loadPins()}}
 async function loadPins(){if(DEMO||!S.admin)return;try{S.pins=await rpc("pul_admin_people",{p_pin:pin()});if(S.tab==="set")softRender()}catch(e){}}
 async function showFoto(id){
   $("dlgBody").innerHTML=`<h3>Foto</h3><span class="note">Carico…</span>`;$("dlg").showModal();
@@ -335,23 +344,23 @@ const UL=a=>`<ul class="gl">${a.map(x=>`<li>${x}</li>`).join("")}</ul>`;
 function viewGuida(){
   const dl=esc(S.cfg.deadline||"18:00"),se=esc(S.cfg.sera||"19:30"),mo=esc(S.cfg.mattina||"10:00"),tl=+(S.cfg.tolleranza??1);
   const staff=[
-    G("1 · Primo accesso",UL(["Tocca il nome in alto, scegli <b>chi sei</b> e inserisci il tuo <b>PIN personale</b> (te lo dà l'amministrazione). Serve una volta sola su questo telefono: ogni registrazione è firmata con il tuo nome.","Tocca <b>Attiva avviso</b> in fondo per ricevere le notifiche.","iPhone: le notifiche funzionano solo se l'HUB è aggiunto alla Home (Safari → Condividi → Aggiungi a Home) e lo apri da lì."])),
+    G("1 · Primo accesso",UL(["<b>Primo accesso</b>: tocca il nome in alto → \"Primo accesso\", scegli il tuo nome e scrivi la tua email. Quando l'amministrazione approva ti arriva il <b>PIN personale</b> per email.","Poi tocca <b>Entra</b>, scegli il nome e inserisci il PIN: serve una volta sola su questo telefono. Ogni registrazione è firmata con il tuo nome.","PIN dimenticato: \"PIN dimenticato\" e te ne arriva uno nuovo per email.","Tocca <b>Attiva avviso</b> in fondo per ricevere le notifiche.","iPhone: le notifiche funzionano solo se l'HUB è aggiunto alla Home (Safari → Condividi → Aggiungi a Home) e lo apri da lì."])),
     G("2 · I tre compiti",`<table><tbody>
       <tr><td><b>Incaricato del giorno</b><span class="s">lun-ven, a rotazione tra chi è in sede, circa 1 volta ogni 2 settimane</span></td><td>Saponi, carta mani, bagno, cestini, desk, sala. Max 10 minuti, <b>da registrare entro le ${dl}</b>.<span class="s">Giorno impresa: solo saponi e carta.</span></td></tr>
       <tr><td><b>Controllo serale</b><span class="s">a rotazione tra chi è in sede la sera (turno che finisce dopo le ${se}); mai l'incaricato dello stesso giorno</span></td><td>Controlla ✓/✗ ogni compito dell'incaricato, poi docce, asciugatura spogliatoi e desk: tutto pronto per il giorno dopo.</td></tr>
       <tr><td><b>Apertura</b><span class="s">a rotazione tra chi inizia entro le ${mo}; mai chi ha fatto il controllo la sera prima</span></td><td>Controlla ✓/✗ come sono stati lasciati spogliatoi, docce e desk la sera prima.</td></tr></tbody></table>`),
-    G("3 · Come registrare",UL(["Apri <b>Check Pulizie</b>: vedi solo i tuoi compiti di oggi.","Incaricato: spunta ogni voce fatta e scegli lo stato della sala. Se vuoi, aggiungi una foto del bagno.","Chi controlla: per ogni voce tocca <b>✓</b> se è fatta, <b>✗</b> se non è fatta. <b>Ogni ✗ richiede una foto</b> (si apre la fotocamera).","Scrivi nelle <b>Note</b> cosa manca o cosa hai segnalato, poi tocca <b>Registra</b>. L'ora la mette il sistema.","Senza rete la registrazione resta sul telefono e parte da sola appena torna la connessione."])),
+    G("3 · Come registrare",UL(["Apri <b>Check Pulizie</b>: vedi solo i tuoi compiti di oggi.","Incaricato: spunta ogni voce fatta e scegli lo stato della sala. Se vuoi, aggiungi una foto del bagno.",`Chi controlla: per ogni voce tocca <b>✓</b> se è fatta, <b>✗</b> se non è fatta. ${S.cfg.fotoObbl?"<b>Ogni ✗ richiede una foto</b>":"Per ogni ✗ è <b>consigliata una foto</b>"} (si apre la fotocamera).`,"Scrivi nelle <b>Note</b> cosa manca o cosa hai segnalato, poi tocca <b>Registra</b>. L'ora la mette il sistema.","Senza rete la registrazione resta sul telefono e parte da sola appena torna la connessione."])),
     G("4 · Promemoria",UL(["Il giorno prima alle 18:00: \"domani sei l'incaricato\".","Alle 16:00, se da incaricato non hai ancora registrato.","Alle 20:30, se il controllo serale non è ancora registrato.","Gli orari valgono d'inverno; con l'ora legale arrivano un'ora dopo."])),
     G("5 · Cambi turno",UL(["Se fai il turno di un collega usa <b>Copro un collega</b>: il turno passa a te e risulta firmato a tuo nome.","Senza registrazione il turno resta a chi era in calendario."])),
     G("6 · Multe",UL(["Una ✗ al controllo crea una multa a chi doveva fare quel compito.",`Turno non registrato o incaricato registrato dopo le ${dl}: ${tl?`${tl===1?"la prima volta nel mese è tollerata":"le prime "+tl+" volte nel mese sono tollerate"}, poi è multa.`:"è multa."}`,"L'amministrazione conferma o annulla ogni multa.","Le multe confermate vengono <b>decurtate dal compenso del mese</b>."])),
-    G("Problemi?",UL(["PIN dimenticato o telefono nuovo: chiedi un nuovo PIN all'amministrazione.","Nome sbagliato: tocca il nome in alto e rientra con il tuo PIN.","Non vedi il turno giusto: tocca ⟳ in alto nell'HUB.","Nell'HUB compare <b>Aggiorna</b>: toccalo per avere l'ultima versione."]))
+    G("Problemi?",UL(["Telefono nuovo: rientra con il tuo PIN. Non lo ricordi: \"PIN dimenticato\".","Nome sbagliato: tocca il nome in alto e rientra con il tuo PIN.","Non vedi il turno giusto: tocca ⟳ in alto nell'HUB.","Nell'HUB compare <b>Aggiorna</b>: toccalo per avere l'ultima versione."]))
   ];
   const admin=[
     G("Giorno",UL(["Per ogni giorno: chi ha pulito e a che ora (ora del server, non modificabile), chi ha controllato, ✓/✗ voce per voce, note, foto (📷) e multe nate quel giorno.","\"in ritardo\" = incaricato registrato dopo la scadenza.","Frecce ‹ › per cambiare giorno."])),
-    G("Calendario",UL(["2 settimane: apertura, incaricato, controllo serale. Pallino verde fatto, rosso non fatto, giallo oggi da fare.","Tocca un giorno per aprirne il dettaglio.",`Turni dagli <b>Orari Trainer</b> (sede Cecina Center), tutti a rotazione: apertura tra chi inizia entro le ${mo}, controllo serale tra chi finisce dopo le ${se}, incaricato tra chi è in sede. Nessuno controlla sé stesso. Se cambiano gli orari, i turni si aggiornano da soli.`])),
+    G("Calendario",UL(["2 settimane: apertura, incaricato, controllo serale. Pallino verde fatto, rosso non fatto, giallo oggi da fare.","Tocca un giorno per aprirne il dettaglio.",`Turni dagli <b>Orari Trainer</b> (sede Cecina Center) più le presenze fisse, tutti a rotazione: apertura tra chi inizia entro le ${mo}, controllo serale tra chi finisce dopo le ${se}, incaricato tra chi è in sede. Nessuno controlla sé stesso. Se cambiano gli orari, i turni si aggiornano da soli.`])),
     G("Registro",UL(["Ultime registrazioni con esito e note.","% di turni registrati negli ultimi 30 giorni."])),
-    G("Multe",UL(["Nascono <b>da confermare</b>: scegli <b>confermata</b> o <b>annullata</b>. Guarda le foto prima di confermare.",`Le dimenticanze tollerate (${tl} al mese a testa) compaiono già annullate, a 0 €.`,"A fine mese togli gli importi dai compensi, poi tocca <b>Segna tutte come decurtate</b>."])),
-    G("Impostazioni",UL(["<b>Giorni impresa</b>: inseriscili appena l'impresa li comunica a inizio mese.","<b>Regole</b>: frequenza, importo multa, data inizio, scadenza incaricato, orari per apertura e controllo serale, dimenticanze tollerate.","<b>Persone</b>: \"sempre in sede\" per chi non compare negli Orari Trainer; togli \"attivo\" per escludere qualcuno.","<b>PIN personali</b>: \"Nuovo PIN\" genera un PIN da comunicare (viene mostrato una sola volta) e scollega i vecchi telefoni di quella persona. Tocca due volte per confermare."]))
+    G("Multe",UL(["Nascono <b>da confermare</b>: scegli <b>confermata</b> o <b>annullata</b>. Se c'è, guarda la foto prima di confermare.",`Le dimenticanze tollerate (${tl} al mese a testa) compaiono già annullate, a 0 €.`,"A fine mese togli gli importi dai compensi, poi tocca <b>Segna tutte come decurtate</b>."])),
+    G("Impostazioni",UL(["<b>Giorni impresa</b>: inseriscili appena l'impresa li comunica a inizio mese.","<b>Regole</b>: frequenza, importo multa, data inizio, scadenza incaricato, orari per apertura e controllo serale, dimenticanze tollerate.","<b>Persone</b>: \"sempre in sede\" per chi non compare negli Orari Trainer; togli \"attivo\" per escludere qualcuno.","<b>Richieste di accesso</b>: lo staff si registra con nome ed email; tu tocchi <b>Approva</b> e il PIN parte per email (viene mostrato anche a te una volta).","<b>PIN personali</b>: \"Nuovo PIN\" lo rigenera, lo invia all'email registrata e scollega i vecchi telefoni. Tocca due volte per confermare.","<b>Presenze fisse</b>: chi è in sede al mattino anche senza turno in orario (giorni e ora di arrivo).","<b>Foto sui ✗</b>: consigliata oppure obbligatoria."]))
   ];
   return `<div class="day"><h2>Guida</h2><button class="btn" id="g-back">← Indietro</button></div>`+(MODE==="admin"?`<div class="lbl">Amministrazione</div>`+admin.join("")+`<div class="lbl">Cosa vede lo staff</div>`:"")+staff.join("");
 }
@@ -385,6 +394,8 @@ function bind(){
   document.querySelectorAll("[data-rmimp]").forEach(b=>b.onclick=async()=>{S.impresa=S.impresa.filter(d=>d!==b.dataset.rmimp);await db.del("impresa",b.dataset.rmimp);reset();render()});
   on("imp-add",async()=>{const d=$("imp-d").value;if(!d||S.impresa.includes(d))return;S.impresa.push(d);await db.save("impresa",{date:d});reset();toast("Giorno impresa aggiunto");render()});
   on("c-save",async()=>{S.cfg.freq=+$("c-freq").value;S.cfg.multa=+$("c-multa").value||0;S.cfg.start=$("c-start").value;
+    S.cfg.fotoObbl=$("c-foto").value==="1";
+    S.cfg.fisse=S.cfg.people.map((p,i)=>({name:p.name,days:[...document.querySelectorAll(`[data-fd="${i}"]:checked`)].map(x=>+x.value),start:(document.querySelector(`[data-ft="${i}"]`)||{}).value||""})).filter(f=>f.days.length&&f.start);
     S.cfg.deadline=$("c-dl").value||"18:00";S.cfg.mattina=$("c-mat").value||"10:00";S.cfg.sera=$("c-sera").value||"19:30";S.cfg.tolleranza=+$("c-tol").value||0;
     document.querySelectorAll("[data-alw]").forEach(i=>S.cfg.people[+i.dataset.alw].always=i.checked);
     document.querySelectorAll("[data-on]").forEach(i=>S.cfg.people[+i.dataset.on].off=!i.checked);
@@ -392,9 +403,9 @@ function bind(){
   on("b-push",enablePush);
   document.querySelectorAll("[data-newpin]").forEach(b=>b.onclick=async()=>{const n=b.dataset.newpin;
     if(!confirmBox(b,"Conferma: nuovo PIN"))return;
-    try{const np=DEMO?"1234":await rpc("pul_admin_new_pin",{p_pin:pin(),p_person:n});
-      $("dlgBody").innerHTML=`<h3>Nuovo PIN</h3><p style="margin:0">${esc(n)}</p><div style="font:800 40px var(--display);letter-spacing:.2em;text-align:center">${esc(np)}</div><span class="note">Comunicalo a ${esc(first(n))}: non verrà più mostrato.</span><button class="primary" id="np-ok">Fatto</button>`;
-      $("dlg").showModal();$("np-ok").onclick=()=>{$("dlg").close();loadPins()}}catch(e){toast(e.message)}});
+    try{const r=DEMO?{pin:"1234"}:await rpc("pul_admin_new_pin",{p_pin:pin(),p_person:n});pinBox(n,r)}catch(e){toast(e.message)}});
+  document.querySelectorAll("[data-appr]").forEach(b=>b.onclick=async()=>{const ok=b.dataset.ok==="1";if(!ok&&!confirmBox(b,"Rifiuta?"))return;
+    try{const r=await rpc("pul_admin_approve",{p_pin:pin(),p_id:+b.dataset.appr,p_ok:ok});if(ok){const q=(S.pins.richieste||[]).find(x=>x.id==b.dataset.appr)||{};pinBox(q.person,r)}else{toast("Richiesta rifiutata");loadPins()}}catch(e){toast(e.message)}});
   document.querySelectorAll("[data-foto]").forEach(b=>b.onclick=()=>showFoto(b.dataset.foto));
   document.querySelectorAll("[data-cover]").forEach(b=>b.onclick=()=>{S.cover=b.dataset.cover;render()});
   bindForm();
@@ -402,16 +413,33 @@ function bind(){
 function reset(){clearCalc();rebuildMulte()}
 function toast(t){const e=$("toast");e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2200)}
 const tok=()=>ls.get("pul-tok")||"";
-function pickMe(){
-  $("dlgBody").innerHTML=`<h3>Chi sei?</h3><select id="me-s"><option value="">— scegli —</option>${S.cfg.people.filter(p=>!p.off).map(p=>`<option ${p.name===S.me?"selected":""}>${esc(p.name)}</option>`).join("")}</select>
-    ${DEMO?"":`<input id="me-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="Il tuo PIN personale" style="border:1px solid var(--line);border-radius:8px;padding:12px;font-size:18px;background:var(--surface)"><span class="note">Il PIN te lo dà l'amministrazione. Serve una volta sola su questo telefono.</span>`}
-    <div id="me-err" class="alert ko" hidden></div><button class="primary" id="me-ok">Entra</button>`;
-  $("dlg").showModal();
-  const go=async()=>{const n=$("me-s").value;if(!n)return;const b=$("me-ok");b.disabled=true;b.textContent="Verifico…";
-    try{if(!DEMO){const t=await rpc("pul_login",{p_person:n,p_pin:$("me-pin").value.trim()});ls.set("pul-tok",t)}
-      S.me=n;ls.set("pul-me",n);if(ls.get("pul-push")!==n)ls.set("pul-push",null);$("dlg").close();S.open=null;S.dirty=false;render();flushQueue()}
-    catch(e){$("me-err").textContent=e.message;$("me-err").hidden=false;b.disabled=false;b.textContent="Entra"}};
-  $("me-ok").onclick=go;const pi=$("me-pin");if(pi)pi.onkeydown=e=>{if(e.key==="Enter")go()};
+function pickMe(mode){
+  mode=mode||"login";
+  const opts=`<option value="">— scegli il tuo nome —</option>${S.cfg.people.filter(p=>!p.off).map(p=>`<option ${p.name===S.me?"selected":""}>${esc(p.name)}</option>`).join("")}`;
+  const inp=(id,type,ph,mode)=>`<input id="${id}" type="${type}" ${mode||""} autocomplete="off" placeholder="${ph}" style="border:1px solid var(--line);border-radius:8px;padding:12px;font-size:18px;background:var(--surface)">`;
+  const body={
+    login:`<h3>Entra</h3><select id="me-s">${opts}</select>${DEMO?"":inp("me-pin","password","Il tuo PIN",'inputmode="numeric" maxlength="8"')}
+      <div id="me-err" class="alert ko" hidden></div><button class="primary" id="me-ok">Entra</button>
+      ${DEMO?"":`<div class="row" style="justify-content:space-between"><button class="lnk" data-m="reg">Primo accesso</button><button class="lnk" data-m="forgot">PIN dimenticato</button></div>`}`,
+    reg:`<h3>Primo accesso</h3><span class="note">Scegli il tuo nome e scrivi la tua email: quando l'amministrazione approva, ricevi il PIN per email.</span><select id="me-s">${opts}</select>${inp("me-mail","email","La tua email",'inputmode="email"')}
+      <div id="me-err" class="alert ko" hidden></div><button class="primary" id="me-ok">Invia richiesta</button><button class="lnk" data-m="login">← Ho già il PIN</button>`,
+    forgot:`<h3>PIN dimenticato</h3><span class="note">Ti mandiamo un nuovo PIN all'email con cui ti sei registrato.</span><select id="me-s">${opts}</select>
+      <div id="me-err" class="alert ko" hidden></div><button class="primary" id="me-ok">Invia nuovo PIN</button><button class="lnk" data-m="login">← Indietro</button>`
+  }[mode];
+  $("dlgBody").innerHTML=body;if(!$("dlg").open)$("dlg").showModal();
+  $("dlgBody").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>pickMe(b.dataset.m));
+  const err=t=>{$("me-err").textContent=t;$("me-err").hidden=false};
+  const done=html=>{$("dlgBody").innerHTML=html+`<button class="primary" id="me-back">Ok</button>`;$("me-back").onclick=()=>pickMe("login")};
+  const go=async()=>{const n=$("me-s").value;if(!n)return err("Scegli il tuo nome");const b=$("me-ok"),t=b.textContent;b.disabled=true;b.textContent="Attendi…";
+    try{
+      if(mode==="login"){if(!DEMO){const k=await rpc("pul_login",{p_person:n,p_pin:$("me-pin").value.trim()});ls.set("pul-tok",k)}
+        S.me=n;ls.set("pul-me",n);if(ls.get("pul-push")!==n)ls.set("pul-push",null);$("dlg").close();S.open=null;S.dirty=false;render();flushQueue();return}
+      if(mode==="reg"){const r=await rpc("pul_register",{p_person:n,p_email:$("me-mail").value});
+        return done(r.stato==="inviato"?`<h3>PIN inviato ✉️</h3><span class="note">Controlla ${esc(r.email)} (anche lo spam).</span>`:`<h3>Richiesta inviata ✓</h3><span class="note">Appena l'amministrazione approva ricevi il PIN per email. Poi torna qui e tocca "Entra".</span>`)}
+      if(mode==="forgot"){const r=await rpc("pul_forgot",{p_person:n});
+        return done(r.stato==="inviato"?`<h3>PIN inviato ✉️</h3><span class="note">Controlla ${esc(r.email)} (anche lo spam).</span>`:`<h3>Nessuna email registrata</h3><span class="note">Fai prima "Primo accesso" con la tua email.</span>`)}
+    }catch(e){err(e.message);b.disabled=false;b.textContent=t}};
+  $("me-ok").onclick=go;["me-pin","me-mail"].forEach(i=>{const x=$(i);if(x)x.onkeydown=e=>{if(e.key==="Enter")go()}});
 }
 $("b-me").onclick=pickMe;
 $("b-guide").onclick=()=>{S.guide=!S.guide;render();scrollTo(0,0)};

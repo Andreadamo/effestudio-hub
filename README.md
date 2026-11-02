@@ -25,6 +25,7 @@ Aggiungere un'app: una riga in `apps.js`.
 - Dati: Supabase progetto `spring-league`, schema `pulizie` (accesso solo via funzioni `pul_*`, vedi `pulizie/supabase/schema.sql`).
 - Accesso staff: nome + PIN personale (generato in Impostazioni → PIN personali); persona e ora delle registrazioni le decide il server.
 - Turni tutti a rotazione: apertura (chi inizia entro le 10:00, mai chi ha fatto il controllo la sera prima), controllo serale (chi finisce dopo le 19:30), incaricato (mai chi fa il controllo serale).
-- Foto obbligatoria per ogni ✗ al controllo; scadenza incaricato 18:00; 1 dimenticanza/ritardo al mese tollerata.
+- Foto consigliata (o obbligatoria da Impostazioni) per ogni ✗; scadenza incaricato 18:00; 1 dimenticanza/ritardo al mese tollerata; presenze fisse fuori orario (Impostazioni).
+- Primo accesso: nome + email → approvazione in Impostazioni → PIN via email (web app Apps Script dell'account Effestudio, codice non nel repo perché contiene il segreto).
 - Notifiche: edge function `pulizie-avviso` via pg_cron (UTC): 17:00 domani sei l'incaricato · 15:00 lun-ven promemoria incaricato · 19:30 lun-ven promemoria controllo serale.
-- Schema: `pulizie/supabase/schema.sql` + `pulizie/supabase/v2.sql`.
+- Schema: `pulizie/supabase/schema.sql` + `pulizie/supabase/v2.sql` + `pulizie/supabase/v3.sql`.
