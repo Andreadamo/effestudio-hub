@@ -26,7 +26,7 @@ const ITEMS={
 const SALA=[["ok","Sala ok"],["pulita","Pulita da me"],["segnalata","Da pulire (segnalo)"]];
 const ROLE={ape:{n:"Apertura",s:"Verifica chiusura di ieri",ic:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'},
   inc:{n:"Incaricato del giorno",s:"Spogliatoi, cestini, desk, sala",ic:'<path d="M3 21h18M6 21V10l6-6 6 6v11M10 21v-5h4v5"/>'},
-  chi:{n:"Chiusura",s:"Verifica incaricato + docce",ic:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>'}};
+  chi:{n:"Controllo serale",s:"Verifica incaricato + docce",ic:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>'}};
 const FESTIVI=["2026-11-01","2026-12-08","2026-12-25","2026-12-26","2027-01-01","2027-01-06","2027-04-05","2027-04-25","2027-05-01","2027-06-02","2027-08-15"];
 
 /* ---------- stato ---------- */
@@ -75,31 +75,39 @@ function inRota(n){const p=person(n);return p&&!p.off}
 const CACHE={},TALLY={};
 // giorno lavorativo precedente (>= inizio rotazione) o null
 function prevRot(d){if(!S.cfg.start||d<=S.cfg.start)return null;let x=addDays(d,-1);while(x>=S.cfg.start&&isOff(x))x=addDays(x,-1);return x>=S.cfg.start?x:null}
+function pick(cands,t){const order=S.cfg.people.map(p=>p.name);return cands.slice().sort((a,b)=>(t.cnt[a]||0)-(t.cnt[b]||0)||(t.last[a]||"").localeCompare(t.last[b]||"")||order.indexOf(a)-order.indexOf(b))[0]||""}
+const T0=()=>({cnt:{},last:{}});
+const bump=(t,n,d)=>{const o={cnt:{...t.cnt},last:{...t.last}};if(n){o.cnt[n]=(o.cnt[n]||0)+1;o.last[n]=d}return o};
 function assign(d){
   if(isOff(d)||!S.cfg.start||d<S.cfg.start)return null;
   if(CACHE[d])return CACHE[d];
   if(!S.slots.length&&S.turniDb){const t=S.turniDb[d];return t?(CACHE[d]={date:d,ape:t.ape||"",chi:t.chi||"",inc:t.inc||"",apeT:"",chiT:"",imp:isImp(d)}):null}
-  // conteggi turni fino al giorno prima (calcolati una volta sola, in ordine)
-  let p=prevRot(d),tl={cnt:{},last:{},idx:-1};
+  // conteggi fino al giorno prima (calcolati una volta, in ordine)
+  let p=prevRot(d),tl={inc:T0(),ape:T0(),chi:T0(),idx:-1};
   if(p){const chain=[];let q=p;while(q&&!TALLY[q]){chain.push(q);q=prevRot(q)}for(let i=chain.length-1;i>=0;i--)assign(chain[i]);tl=TALLY[p]}
-  const idx=tl.idx+1;
+  const idx=tl.idx+1,prevChi=p?(CACHE[p]||{}).chi:"";
   const sh=shifts(d).filter(x=>inRota(x.name));
   const sw=k=>(S.swaps.find(x=>x.date===d&&x.role===k)||{}).person;
-  const ape=sw("ape")||(sh.slice().sort((a,b)=>mins(a.start)-mins(b.start))[0]||{}).name||"";
-  const chi=sw("chi")||(sh.slice().sort((a,b)=>mins(b.end)-mins(a.end))[0]||{}).name||"";
-  // incaricato: tra chi è in palestra quel giorno, chi ha fatto meno turni (poi chi l'ha fatto meno di recente)
+  const names=f=>[...new Set(sh.filter(f).map(x=>x.name))];
+  // controllo serale: a rotazione tra chi è in sede la sera (turno che finisce dopo le 19:30)
+  let ev=names(x=>mins(x.end)>=mins(S.cfg.sera||"19:30"));if(!ev.length)ev=names(x=>mins(x.end)===Math.max(...sh.map(y=>mins(y.end))));
+  const chi=sw("chi")||pick(ev,tl.chi);
+  // apertura: a rotazione tra chi inizia entro le 10:00, mai chi ha chiuso la sera prima (non controlla sé stesso)
+  let mo=names(x=>mins(x.start)<=mins(S.cfg.mattina||"10:00"));if(!mo.length)mo=names(x=>mins(x.start)===Math.min(...sh.map(y=>mins(y.start))));
+  const mo2=mo.filter(n=>n!==prevChi);
+  const ape=sw("ape")||pick(mo2.length?mo2:mo,tl.ape);
+  // incaricato: tra chi è in sede, mai chi fa il controllo serale; chi ne ha fatti meno passa prima
   let inc=sw("inc")||"";
   const active=S.cfg.freq<2||idx%S.cfg.freq===0;
   if(!inc&&active){
     const here=new Set(sh.map(x=>x.name));S.cfg.people.forEach(p=>{if(p.always&&!p.off)here.add(p.name)});
-    const order=S.cfg.people.map(p=>p.name),cnt=tl.cnt,last=tl.last;
-    const cand=[...here].filter(inRota).sort((a,b)=>(cnt[a]||0)-(cnt[b]||0)||(last[a]||"").localeCompare(last[b]||"")||order.indexOf(a)-order.indexOf(b));
-    inc=cand[0]||"";
+    const c=[...here].filter(inRota),c2=c.filter(n=>n!==chi);
+    inc=pick(c2.length?c2:c,tl.inc);
   }
-  const ninc=active?inc:"",cnt={...tl.cnt},last={...tl.last};if(ninc){cnt[ninc]=(cnt[ninc]||0)+1;last[ninc]=d}
-  TALLY[d]={cnt,last,idx};
-  const sOf=n=>sh.find(x=>x.name===n)||{};
-  return CACHE[d]={date:d,ape,chi,inc:ninc,apeT:sOf(ape).start||"",chiT:sOf(chi).end||"",imp:isImp(d)};
+  const ninc=active?inc:"";
+  TALLY[d]={inc:bump(tl.inc,ninc,d),ape:bump(tl.ape,ape,d),chi:bump(tl.chi,chi,d),idx};
+  const sOf=n=>sh.filter(x=>x.name===n);
+  return CACHE[d]={date:d,ape,chi,inc:ninc,apeT:(sOf(ape).map(x=>x.start).sort()[0])||"",chiT:(sOf(chi).map(x=>x.end).sort().pop())||"",imp:isImp(d)};
 }
 function clearCalc(){for(const k in CACHE)delete CACHE[k];for(const k in TALLY)delete TALLY[k]}
 const itemsInc=d=>isImp(d)?ITEMS.inc_imp:ITEMS.inc_std;
@@ -108,15 +116,20 @@ const logOf=(d,r)=>S.logs.filter(l=>l.date===d&&l.role===r).sort((a,b)=>b.ts.loc
 /* ---------- multe ---------- */
 function rebuildMulte(){
   const keep=S.multe.filter(m=>m.manual||m.stato!=="da confermare");const auto=[];
-  const add=(date,p,motivo,key)=>{if(!p)return;const old=S.multe.find(m=>m.key===key);auto.push(old||{key,date,person:p,motivo,importo:S.cfg.multa,stato:"da confermare"})};
+  const add=(date,p,motivo,key,forget)=>{if(!p)return;const old=S.multe.find(m=>m.key===key);auto.push(old||{key,date,person:p,motivo,importo:S.cfg.multa,stato:"da confermare",forget})};
   workDays(S.cfg.start||today(),addDays(today(),-1)).forEach(d=>{
-    const a=assign(d);if(!a)return;const it=itemsInc(d),c=logOf(d,"chi");
-    if(a.inc&&!logOf(d,"inc"))add(d,a.inc,"Incaricato: nessuna registrazione","n-inc-"+d);
-    if(c&&c.verify)it.forEach(([k,l])=>{if(c.verify[k]==="ko")add(d,a.inc,"Non fatto (controllo chiusura): "+l,"ko-inc-"+d+k)});
-    if(a.chi&&!c)add(d,a.chi,"Chiusura: nessuna registrazione","n-chi-"+d);
+    const a=assign(d);if(!a)return;const it=itemsInc(d),c=logOf(d,"chi"),li=logOf(d,"inc");
+    if(a.inc&&!li)add(d,a.inc,"Incaricato: nessuna registrazione","n-inc-"+d,1);
+    else if(li&&li.late)add(d,li.person||a.inc,"Incaricato: registrato dopo le "+(S.cfg.deadline||"18:00"),"late-inc-"+d,1);
+    if(c&&c.verify)it.forEach(([k,l])=>{if(c.verify[k]==="ko")add(d,(li&&li.person)||a.inc,"Non fatto (controllo serale): "+l,"ko-inc-"+d+k)});
+    if(a.chi&&!c)add(d,a.chi,"Controllo serale: nessuna registrazione","n-chi-"+d,1);
     const o=S.logs.find(l=>l.role==="ape"&&l.ref===d);
-    if(o&&o.verify)ITEMS.ape.forEach(([k,l])=>{if(o.verify[k]==="ko")add(d,a.chi,"Non fatto (controllo apertura): "+l,"ko-chi-"+d+k)});
+    if(o&&o.verify)ITEMS.ape.forEach(([k,l])=>{if(o.verify[k]==="ko")add(d,(c&&c.person)||a.chi,"Non fatto (controllo apertura): "+l,"ko-chi-"+d+k)});
   });
+  // tolleranza: le prime N dimenticanze/ritardi del mese per persona non si pagano
+  const tol=+(S.cfg.tolleranza??1),used={};
+  auto.sort((x,y)=>x.date.localeCompare(y.date)).forEach(m=>{if(!m.forget||m.manual)return;const k=m.person+m.date.slice(0,7);used[k]=(used[k]||0)+1;
+    if(used[k]<=tol){m.stato="annullata";m.importo=0;if(!/tolleranza/.test(m.motivo))m.motivo+=" · tolleranza ("+used[k]+"ª del mese)"}});
   const keys=new Set(keep.map(m=>m.key));S.multe=keep.concat(auto.filter(m=>!keys.has(m.key)));
 }
 
@@ -143,11 +156,12 @@ function viewOggi(){
 function form(r,d,a,who){
   const l=logOf(d,r)||{},it=l.items||{},vf=l.verify||{};
   const chk=list=>list.map(([k,t])=>`<label class="chk ${it[k]?"on":""}"><input type="checkbox" data-k="${k}" ${it[k]?"checked":""}>${esc(t)}</label>`).join("");
-  const ver=(list,title,ref)=>`<div class="lbl">${title}</div>`+list.map(([k,t])=>`<div class="ver"><span class="l">${esc(t)}</span><div class="seg"><button class="ok" data-v="${k}" data-val="ok" aria-pressed="${vf[k]==="ok"}" aria-label="Fatto">✓</button><button class="ko" data-v="${k}" data-val="ko" aria-pressed="${vf[k]==="ko"}" aria-label="Non fatto">✗</button></div></div>`).join("")+(ref?`<span class="note">${ref}</span>`:"");
+  const fotoBtn=(k,req)=>`<label class="foto ${req?"req":""}" data-fk="${k}" ${req&&vf[k]!=="ko"?"hidden":""}><input type="file" accept="image/*" capture="environment" hidden><span>📷 ${req?"Foto obbligatoria":"Aggiungi foto (facoltativa)"}</span><img alt="" hidden></label>`;
+  const ver=(list,title,ref)=>`<div class="lbl">${title}</div>`+list.map(([k,t])=>`<div class="ver"><span class="l">${esc(t)}</span><div class="seg"><button class="ok" data-v="${k}" data-val="ok" aria-pressed="${vf[k]==="ok"}" aria-label="Fatto">✓</button><button class="ko" data-v="${k}" data-val="ko" aria-pressed="${vf[k]==="ko"}" aria-label="Non fatto">✗</button></div></div>${fotoBtn(k,1)}`).join("")+(ref?`<span class="note">${ref}</span>`:"");
   let h="";
-  if(r==="inc"){h+=chk(itemsInc(d));if(!a.imp)h+=`<div class="lbl">Sala</div><div class="radio">${SALA.map(([k,t])=>`<button data-sala="${k}" aria-pressed="${l.sala===k}">${t}</button>`).join("")}</div>`}
-  if(r==="chi"){h+=ver(itemsInc(d),"Verifica incaricato · "+esc(first(a.inc)||"—"),"✗ = non fatto → multa all'incaricato");h+=`<div class="lbl">Chiusura</div>`+chk(ITEMS.chi)}
-  if(r==="ape"){const p=prevWork(d),pa=assign(p)||{};h+=ver(ITEMS.ape,"Verifica chiusura di "+fmtS(p)+" · "+esc(first(pa.chi)||"—"),"✗ = non fatto → multa a chi ha chiuso")}
+  if(r==="inc"){const late=d===today()&&nowHM()>(S.cfg.deadline||"18:00");h+=`<div class="alert ${late?"ko":"info"}">${late?"Scadenza delle "+esc(S.cfg.deadline||"18:00")+" passata: registra comunque, risulterà in ritardo.":"Da registrare entro le "+esc(S.cfg.deadline||"18:00")+"."}</div>`;h+=chk(itemsInc(d));if(!a.imp)h+=fotoBtn("bagno",0);if(!a.imp)h+=`<div class="lbl">Sala</div><div class="radio">${SALA.map(([k,t])=>`<button data-sala="${k}" aria-pressed="${l.sala===k}">${t}</button>`).join("")}</div>`}
+  if(r==="chi"){h+=ver(itemsInc(d),"Verifica incaricato · "+esc(first(a.inc)||"—"),"✗ = non fatto → foto obbligatoria e multa all'incaricato");h+=`<div class="lbl">Chiusura</div>`+chk(ITEMS.chi)}
+  if(r==="ape"){const p=prevWork(d),pa=assign(p)||{};h+=ver(ITEMS.ape,"Verifica chiusura di "+fmtS(p)+" · "+esc(first(pa.chi)||"—"),"✗ = non fatto → foto obbligatoria e multa a chi ha fatto il controllo serale")}
   h+=`<textarea class="f-note" placeholder="Note (cosa manca, cosa hai segnalato…)">${esc(l.note||"")}</textarea>`;
   h+=`<button class="primary f-save" data-r="${r}">${l.id?"Aggiorna registrazione":"Registra"}${who&&S.me&&who!==S.me?" (cambio turno)":""}</button>`;
   if(who&&S.me&&who!==S.me)h+=`<span class="note">Sei registrato come ${esc(S.me)}: il turno passa a te.</span>`;
@@ -156,33 +170,43 @@ function form(r,d,a,who){
 function bindForm(){
   document.querySelectorAll(".card-b").forEach(b=>{b.addEventListener("input",()=>S.dirty=true);b.addEventListener("click",e=>{if(e.target.closest("[data-v],[data-sala]"))S.dirty=true})});
   document.querySelectorAll(".chk input").forEach(i=>i.onchange=()=>i.parentElement.classList.toggle("on",i.checked));
-  document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{b.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+  document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{b.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));
+    const f=b.closest(".card-b").querySelector(`.foto[data-fk="${b.dataset.v}"]`);if(f)f.hidden=b.dataset.val!=="ko"});
+  document.querySelectorAll(".foto input").forEach(i=>i.onchange=async()=>{const f=i.files[0];if(!f)return;const lab=i.closest(".foto");lab.querySelector("span").textContent="⏳ Preparo la foto…";
+    try{const data=await shrink(f);lab.dataset.img=data;const im=lab.querySelector("img");im.src=data;im.hidden=false;lab.querySelector("span").textContent="📷 Foto pronta · tocca per cambiarla";lab.classList.add("done")}
+    catch(e){lab.querySelector("span").textContent="📷 Foto non leggibile, riprova"}});
   document.querySelectorAll("[data-sala]").forEach(b=>b.onclick=()=>{b.parentElement.querySelectorAll("[data-sala]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
   document.querySelectorAll(".f-save").forEach(b=>b.onclick=()=>save(b.dataset.r,b.closest(".card-b")));
 }
 async function save(r,box){
-  if(!S.me){pickMe();return}
-  const d=MODE==="staff"?today():S.day,a=assign(d),items={},verify={};
+  if(!S.me||(!DEMO&&!tok())){pickMe();return}
+  const d=MODE==="staff"?today():S.day,a=assign(d),items={},verify={},photos=[];
   box.querySelectorAll(".chk input").forEach(i=>items[i.dataset.k]=i.checked);
   box.querySelectorAll("[data-v][aria-pressed=true]").forEach(b=>verify[b.dataset.v]=b.dataset.val);
   const need=r==="chi"?itemsInc(d).length:r==="ape"?ITEMS.ape.length:0;
   if(Object.keys(verify).length<need){toast("Segna ✓ o ✗ su ogni voce");return}
+  for(const[k,v]of Object.entries(verify))if(v==="ko"){const f=box.querySelector(`.foto[data-fk="${k}"]`);if(!f||!f.dataset.img){toast("Serve la foto per ogni ✗");f&&f.scrollIntoView({block:"center"});return}}
+  box.querySelectorAll(".foto[data-img]").forEach(f=>{if(!f.hidden)photos.push({key:f.dataset.fk,data:f.dataset.img})});
   const sala=(box.querySelector("[data-sala][aria-pressed=true]")||{}).dataset?.sala||"";
-  const who=r==="inc"?a.inc:r==="chi"?a.chi:a.ape;
-  if(who!==S.me){S.swaps=S.swaps.filter(x=>!(x.date===d&&x.role===r));S.swaps.push({date:d,role:r,person:S.me});clearCalc()}
-  const rec={id:(logOf(d,r)||{}).id||"l"+Date.now(),date:d,role:r,person:S.me,items,verify,sala,note:box.querySelector(".f-note").value.trim(),ts:new Date().toISOString().slice(0,16).replace("T"," ").replace(" ","T"),ref:r==="ape"?prevWork(d):""};
-  rec.ts=d+"T"+pad(new Date().getHours())+":"+pad(new Date().getMinutes());
+  const who=r==="inc"?a.inc:r==="chi"?a.chi:a.ape,take=who!==S.me;
+  if(take){S.swaps=S.swaps.filter(x=>!(x.date===d&&x.role===r));S.swaps.push({date:d,role:r,person:S.me});clearCalc()}
+  const old=logOf(d,r);
+  const rec={id:(old||{}).id||"l"+Date.now(),date:d,role:r,person:S.me,items,verify,sala,note:box.querySelector(".f-note").value.trim(),
+    ts:(old&&old.ts)||d+"T"+nowHM(),ref:r==="ape"?prevWork(d):"",late:old?old.late:(r==="inc"&&nowHM()>(S.cfg.deadline||"18:00")),foto:photos.map(p=>p.key)};
   S.logs=S.logs.filter(l=>l.id!==rec.id).concat(rec);
   S.dirty=false;rebuildMulte();S.open=null;S.cover=null;
   toast(Object.values(verify).includes("ko")?"Registrato · ✗ segnalato":"Registrato ✓");render();
-  queuePush(rec);
+  queuePush(rec,take,photos);
 }
-
+const nowHM=()=>pad(new Date().getHours())+":"+pad(new Date().getMinutes());
+// foto ridotta (lato lungo 900px, JPEG) per non pesare su rete e database
+function shrink(file){return new Promise((ok,ko)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const k=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);let q=.7,out=c.toDataURL("image/jpeg",q);while(out.length>280000&&q>.3){q-=.1;out=c.toDataURL("image/jpeg",q)}ok(out)};im.onerror=ko;im.src=u})}
 
 /* ---------- AMMINISTRAZIONE: dettaglio giorno (chi pulisce cosa ha fatto, chi controlla) ---------- */
 const V=v=>v==="ok"?'<span class="badge b-ok">✓ fatto</span>':v==="ko"?'<span class="badge b-ko">✗ non fatto</span>':'<span class="note">—</span>';
 const F=v=>v===true?'<span class="badge b-ok">✓ fatto</span>':v===false?'<span class="badge b-ko">✗ non fatto</span>':'<span class="note">—</span>';
-const who=(l,n)=>l?`<b>${esc(l.person||n)}</b> <span class="note">· ${esc(l.date!==S.day?fmtS(l.date)+" ":"")}${esc(l.ts.slice(11,16))}${l.person!==n&&n?" · al posto di "+esc(first(n)):""}</span>`:`<b>${esc(n||"—")}</b> <span class="badge ${S.day<today()?"b-ko":"b-wait"}">${S.day<today()?"non registrato":"in attesa"}</span>`;
+const fotoLink=l=>l&&l.foto&&l.foto.length?` <button class="btn sm" data-foto="${esc(l.id)}">📷 ${l.foto.length} foto</button>`:"";
+const who=(l,n)=>l?`<b>${esc(l.person||n)}</b> <span class="note">· ${esc(l.date!==S.day?fmtS(l.date)+" ":"")}${esc(l.ts.slice(11,16))}${l.person!==n&&n?" · al posto di "+esc(first(n)):""}</span>${l.late?' <span class="badge b-ko">in ritardo</span>':""}${fotoLink(l)}`:`<b>${esc(n||"—")}</b> <span class="badge ${S.day<today()?"b-ko":"b-wait"}">${S.day<today()?"non registrato":"in attesa"}</span>`;
 function dettaglio(d,a){
   const li=logOf(d,"inc"),lc=logOf(d,"chi"),nx=nextWork(d),lo=S.logs.find(l=>l.role==="ape"&&l.ref===d),an=assign(nx)||{};
   const it=itemsInc(d),ii=(li||{}).items||{},cv=(lc||{}).verify||{};
@@ -191,7 +215,7 @@ function dettaglio(d,a){
     <table><thead><tr><th>Voce</th><th>Incaricato</th><th>Controllo</th></tr></thead><tbody>${it.map(([k,t])=>`<tr><td>${esc(t)}</td><td>${li?F(ii[k]):F()}</td><td>${V(cv[k])}</td></tr>`).join("")}
     ${a.imp?"":`<tr><td>Sala</td><td colspan="2">${li&&li.sala?esc((SALA.find(x=>x[0]===li.sala)||[])[1]||li.sala):"—"}</td></tr>`}</tbody></table>${li&&li.note?`<span class="note">Note incaricato: ${esc(li.note)}</span>`:""}${lc&&lc.note?`<span class="note">Note controllo: ${esc(lc.note)}</span>`:""}</div>`;
   const ci=(lc||{}).items||{},ov=(lo||{}).verify||{};
-  h+=`<div class="panel"><h3>Chiusura</h3><div>${who(lc,a.chi)}</div><div><span class="note">Controllata all'apertura del ${fmtS(nx)} da</span> ${lo?who(lo,an.ape):`<b>${esc(an.ape||"—")}</b> <span class="badge ${nx<=today()&&nx<today()?"b-ko":"b-wait"}">${nx<today()?"non registrato":"in attesa"}</span>`}</div>
+  h+=`<div class="panel"><h3>Controllo serale</h3><div>${who(lc,a.chi)}</div><div><span class="note">Controllata all'apertura del ${fmtS(nx)} da</span> ${lo?who(lo,an.ape):`<b>${esc(an.ape||"—")}</b> <span class="badge ${nx<=today()&&nx<today()?"b-ko":"b-wait"}">${nx<today()?"non registrato":"in attesa"}</span>`}</div>
     <table><thead><tr><th>Chiusura</th><th></th></tr></thead><tbody>${ITEMS.chi.map(([k,t])=>`<tr><td>${esc(t)}</td><td>${lc?F(ci[k]):F()}</td></tr>`).join("")}</tbody></table>
     <table><thead><tr><th>Controllo apertura</th><th></th></tr></thead><tbody>${ITEMS.ape.map(([k,t])=>`<tr><td>${esc(t)}</td><td>${V(ov[k])}</td></tr>`).join("")}</tbody></table>${lo&&lo.note?`<span class="note">Note apertura: ${esc(lo.note)}</span>`:""}</div>`;
   const mm=S.multe.filter(m=>m.date===d&&m.stato!=="annullata");
@@ -208,12 +232,12 @@ function viewStaff(){
   if(b){const rr=["inc","ape","chi"].filter(r=>b[r]===S.me);if(rr.length)h+=`<div class="alert info">🔔 ${tm===addDays(d,1)?"Domani":esc(fmtL(tm))} sei di turno: <b>${rr.map(r=>ROLE[r].n).join(" + ")}</b>${b.imp&&rr.includes("inc")?" · giorno impresa, solo saponi e carta":""}</div>`}
   const mine=a?["inc","chi","ape"].filter(r=>a[r]===S.me):[];
   if(S.cover&&a&&!mine.includes(S.cover))mine.push(S.cover);
-  const lab={inc:"Sei l'incaricato del giorno",chi:"Fai la chiusura: controlla l'incaricato",ape:"Fai l'apertura: controlla la chiusura di ieri"};
+  const lab={inc:"Sei l'incaricato del giorno",chi:"Controllo serale: verifica l'incaricato",ape:"Apertura: controlla come è stato lasciato ieri sera"};
   if(!a)h+=`<div class="panel"><span class="note">${!isOff(d)&&S.cfg.start&&d<S.cfg.start?"I turni pulizie partono da "+esc(fmtL(S.cfg.start))+".":"Oggi palestra chiusa: nessun turno."}</span></div>`;
   else if(!mine.length)h+=`<div class="panel"><b>Oggi nessun compito pulizie per te 👍</b><span class="note">Se sostituisci un collega usa "Copro un collega" qui sotto.</span></div>`;
   mine.forEach(r=>{const l=logOf(d,r),st=statusOf(d,r),orig=a[r];
     h+=`<div class="card mine"><div class="card-h"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ROLE[r].ic}</svg></div>
-      <div class="tx"><b>${r===S.cover&&orig!==S.me?"Copri "+esc(first(orig))+" · "+ROLE[r].n:lab[r]}</b><span>${r==="inc"?(a.imp?"Saponi e carta":"Spogliatoi, cestini, desk, sala"):r==="chi"?"Verifica di "+esc(first(a.inc)||"—")+" + docce e desk":"Verifica di "+esc(first((assign(prevWork(d))||{}).chi)||"—")}</span></div><span class="badge b-${st.c==="ok"?"ok":"wait"}">${st.t}</span></div>
+      <div class="tx"><b>${r===S.cover&&orig!==S.me?"Copri "+esc(first(orig))+" · "+ROLE[r].n:lab[r]}</b><span>${r==="inc"?(a.imp?"Saponi e carta":"Spogliatoi, cestini, desk, sala")+" · entro le "+esc(S.cfg.deadline||"18:00"):r==="chi"?"Verifica di "+esc(first(a.inc)||"—")+" + docce e desk":"Verifica di "+esc(first((assign(prevWork(d))||{}).chi)||"—")}</span></div><span class="badge b-${st.c==="ok"?"ok":"wait"}">${st.t}</span></div>
       <div class="card-b">${form(r,d,a,S.me)}</div></div>`});
   if(a){const others=["inc","chi","ape"].filter(r=>a[r]&&a[r]!==S.me&&r!==S.cover);
     if(others.length)h+=`<div class="panel"><h3>Copro un collega</h3><div class="radio">${others.map(r=>`<button data-cover="${r}">${ROLE[r].n} · ${esc(first(a[r]))}</button>`).join("")}</div></div>`}
@@ -283,34 +307,51 @@ function viewSet(){
   h+=`<div class="panel"><h3>Regole</h3>
     <div class="row"><span style="flex:1">Incaricato</span><select id="c-freq"><option value="1" ${S.cfg.freq==1?"selected":""}>ogni giorno lavorativo</option><option value="2" ${S.cfg.freq==2?"selected":""}>un giorno sì e uno no</option></select></div>
     <div class="row"><span style="flex:1">Importo multa (€)</span><input type="number" id="c-multa" value="${S.cfg.multa}" style="width:90px"></div>
-    <div class="row"><span style="flex:1">Data inizio rotazione</span><input type="date" id="c-start" value="${S.cfg.start}"></div></div>`;
+    <div class="row"><span style="flex:1">Data inizio rotazione</span><input type="date" id="c-start" value="${S.cfg.start}"></div>
+    <div class="row"><span style="flex:1">Scadenza incaricato</span><input type="time" id="c-dl" value="${esc(S.cfg.deadline||"18:00")}"></div>
+    <div class="row"><span style="flex:1">Apertura: chi inizia entro le</span><input type="time" id="c-mat" value="${esc(S.cfg.mattina||"10:00")}"></div>
+    <div class="row"><span style="flex:1">Controllo serale: chi finisce dopo le</span><input type="time" id="c-sera" value="${esc(S.cfg.sera||"19:30")}"></div>
+    <div class="row"><span style="flex:1">Dimenticanze tollerate al mese</span><input type="number" id="c-tol" min="0" max="5" value="${+(S.cfg.tolleranza??1)}" style="width:90px"></div></div>`;
   h+=`<div class="panel"><h3>Persone in rotazione</h3><span class="note">"Sempre in sede" = non dipende dagli Orari Trainer.</span><table><tbody>${S.cfg.people.map((p,i)=>`<tr><td>${esc(p.name)}</td><td><label><input type="checkbox" data-alw="${i}" ${p.always?"checked":""}> sempre in sede</label></td><td><label><input type="checkbox" data-on="${i}" ${p.off?"":"checked"}> attivo</label></td></tr>`).join("")}</tbody></table></div>`;
   h+=`<button class="primary" id="c-save">Salva impostazioni</button>`;
+  h+=`<div class="panel"><h3>PIN personali</h3><span class="note">Ognuno entra in Check Pulizie con il suo PIN: le registrazioni sono firmate. "Nuovo PIN" scollega i telefoni di quella persona.</span><table><tbody>${S.cfg.people.map(p=>{const x=(S.pins||[]).find(q=>q.person===p.name);return`<tr><td>${esc(p.name)}<span class="s">${x?"PIN impostato il "+esc(x.updated):"nessun PIN"}</span></td><td style="text-align:right"><button class="btn" data-newpin="${esc(p.name)}">Nuovo PIN</button></td></tr>`}).join("")}</tbody></table></div>`;
   return h;
 }
 
+
+function confirmBox(b,label){if(b.dataset.arm){delete b.dataset.arm;return true}const t=b.textContent;b.dataset.arm=1;b.textContent=label;setTimeout(()=>{if(b.dataset.arm){delete b.dataset.arm;b.textContent=t}},3000);return false}
+async function loadPins(){if(DEMO||!S.admin)return;try{S.pins=await rpc("pul_admin_people",{p_pin:pin()});if(S.tab==="set")softRender()}catch(e){}}
+async function showFoto(id){
+  $("dlgBody").innerHTML=`<h3>Foto</h3><span class="note">Carico…</span>`;$("dlg").showModal();
+  try{const L=S.logs.find(l=>l.id===id)||{};const ph=DEMO?[]:await rpc("pul_admin_foto",{p_pin:pin(),p_log:id});
+    const lab=k=>([...ITEMS.inc_std,...ITEMS.ape,["bagno","Bagno pulito"]].find(x=>x[0]===k)||[k,k])[1];
+    $("dlgBody").innerHTML=`<h3>Foto · ${esc(first(L.person))} ${L.date?esc(fmtS(L.date)):""}</h3>${ph.map(p=>`<figure style="margin:0"><img src="${p.data}" alt="" style="width:100%;border-radius:8px"><figcaption class="note">${esc(lab(p.key))}</figcaption></figure>`).join("")||'<span class="note">Nessuna foto</span>'}<button class="primary" id="ft-ok">Chiudi</button>`;
+    $("ft-ok").onclick=()=>$("dlg").close()}catch(e){$("dlgBody").innerHTML=`<div class="alert ko">${esc(e.message)}</div>`;setTimeout(()=>$("dlg").close(),2000)}
+}
 
 /* ---------- GUIDA ---------- */
 const G=(t,body)=>`<div class="panel"><h3>${t}</h3>${body}</div>`;
 const UL=a=>`<ul class="gl">${a.map(x=>`<li>${x}</li>`).join("")}</ul>`;
 function viewGuida(){
+  const dl=esc(S.cfg.deadline||"18:00"),se=esc(S.cfg.sera||"19:30"),mo=esc(S.cfg.mattina||"10:00"),tl=+(S.cfg.tolleranza??1);
   const staff=[
-    G("1 · Primo accesso",UL(["Tocca il nome in alto e scegli <b>chi sei</b> (una volta sola per telefono).","Tocca <b>Attiva avviso</b> in fondo: la sera prima del tuo turno da incaricato ti arriva una notifica alle 18:00 (19:00 con l'ora legale).","iPhone: l'avviso funziona solo se l'HUB è aggiunto alla Home (Safari → Condividi → Aggiungi a Home) e lo apri da lì."])),
+    G("1 · Primo accesso",UL(["Tocca il nome in alto, scegli <b>chi sei</b> e inserisci il tuo <b>PIN personale</b> (te lo dà l'amministrazione). Serve una volta sola su questo telefono: ogni registrazione è firmata con il tuo nome.","Tocca <b>Attiva avviso</b> in fondo per ricevere le notifiche.","iPhone: le notifiche funzionano solo se l'HUB è aggiunto alla Home (Safari → Condividi → Aggiungi a Home) e lo apri da lì."])),
     G("2 · I tre compiti",`<table><tbody>
-      <tr><td><b>Incaricato del giorno</b><span class="s">lun-ven, a rotazione, circa 1 volta ogni 2 settimane</span></td><td>Saponi, carta mani, bagno, cestini, desk, sala. Max 10 minuti, entro la giornata.<span class="s">Giorno impresa: solo saponi e carta.</span></td></tr>
-      <tr><td><b>Chiusura</b><span class="s">chi fa l'ultimo turno della sera</span></td><td>Controlla ✓/✗ ogni compito dell'incaricato, poi docce, asciugatura spogliatoi e desk: tutto pronto per il giorno dopo.</td></tr>
-      <tr><td><b>Apertura</b><span class="s">chi fa il primo turno del mattino</span></td><td>Controlla ✓/✗ come ha lasciato spogliatoi, docce e desk chi ha chiuso la sera prima.</td></tr></tbody></table>`),
-    G("3 · Come registrare",UL(["Apri <b>Check Pulizie</b>: vedi solo i tuoi compiti di oggi.","Incaricato: spunta ogni voce fatta e scegli lo stato della sala (ok / pulita da me / da pulire).","Chi controlla: per ogni voce tocca <b>✓</b> se è fatta, <b>✗</b> se non è fatta.","Scrivi nelle <b>Note</b> cosa manca o cosa hai segnalato, poi tocca <b>Registra</b>.","Senza rete la registrazione resta sul telefono e parte da sola appena torna la connessione."])),
-    G("4 · Cambi turno",UL(["Se fai il turno di un collega usa <b>Copro un collega</b>: il turno passa a te e risulta registrato a tuo nome.","Senza registrazione il turno resta a chi era in calendario."])),
-    G("5 · Multe",UL(["Una ✗ al controllo o un turno non registrato crea una multa all'incaricato (o a chi ha chiuso).","L'amministrazione la conferma o la annulla.","Le multe confermate vengono <b>decurtate dal compenso del mese</b>."])),
-    G("Problemi?",UL(["Nome sbagliato: tocca il nome in alto e cambialo.","Non vedi il turno giusto: tocca ⟳ in alto nell'HUB.","Nell'HUB compare <b>Aggiorna</b>: toccalo per avere l'ultima versione."]))
+      <tr><td><b>Incaricato del giorno</b><span class="s">lun-ven, a rotazione tra chi è in sede, circa 1 volta ogni 2 settimane</span></td><td>Saponi, carta mani, bagno, cestini, desk, sala. Max 10 minuti, <b>da registrare entro le ${dl}</b>.<span class="s">Giorno impresa: solo saponi e carta.</span></td></tr>
+      <tr><td><b>Controllo serale</b><span class="s">a rotazione tra chi è in sede la sera (turno che finisce dopo le ${se}); mai l'incaricato dello stesso giorno</span></td><td>Controlla ✓/✗ ogni compito dell'incaricato, poi docce, asciugatura spogliatoi e desk: tutto pronto per il giorno dopo.</td></tr>
+      <tr><td><b>Apertura</b><span class="s">a rotazione tra chi inizia entro le ${mo}; mai chi ha fatto il controllo la sera prima</span></td><td>Controlla ✓/✗ come sono stati lasciati spogliatoi, docce e desk la sera prima.</td></tr></tbody></table>`),
+    G("3 · Come registrare",UL(["Apri <b>Check Pulizie</b>: vedi solo i tuoi compiti di oggi.","Incaricato: spunta ogni voce fatta e scegli lo stato della sala. Se vuoi, aggiungi una foto del bagno.","Chi controlla: per ogni voce tocca <b>✓</b> se è fatta, <b>✗</b> se non è fatta. <b>Ogni ✗ richiede una foto</b> (si apre la fotocamera).","Scrivi nelle <b>Note</b> cosa manca o cosa hai segnalato, poi tocca <b>Registra</b>. L'ora la mette il sistema.","Senza rete la registrazione resta sul telefono e parte da sola appena torna la connessione."])),
+    G("4 · Promemoria",UL(["Il giorno prima alle 18:00: \"domani sei l'incaricato\".","Alle 16:00, se da incaricato non hai ancora registrato.","Alle 20:30, se il controllo serale non è ancora registrato.","Gli orari valgono d'inverno; con l'ora legale arrivano un'ora dopo."])),
+    G("5 · Cambi turno",UL(["Se fai il turno di un collega usa <b>Copro un collega</b>: il turno passa a te e risulta firmato a tuo nome.","Senza registrazione il turno resta a chi era in calendario."])),
+    G("6 · Multe",UL(["Una ✗ al controllo crea una multa a chi doveva fare quel compito.",`Turno non registrato o incaricato registrato dopo le ${dl}: ${tl?`${tl===1?"la prima volta nel mese è tollerata":"le prime "+tl+" volte nel mese sono tollerate"}, poi è multa.`:"è multa."}`,"L'amministrazione conferma o annulla ogni multa.","Le multe confermate vengono <b>decurtate dal compenso del mese</b>."])),
+    G("Problemi?",UL(["PIN dimenticato o telefono nuovo: chiedi un nuovo PIN all'amministrazione.","Nome sbagliato: tocca il nome in alto e rientra con il tuo PIN.","Non vedi il turno giusto: tocca ⟳ in alto nell'HUB.","Nell'HUB compare <b>Aggiorna</b>: toccalo per avere l'ultima versione."]))
   ];
   const admin=[
-    G("Giorno",UL(["Per ogni giorno: chi ha pulito e a che ora, chi ha controllato, ✓/✗ voce per voce, note e multe nate quel giorno.","Frecce ‹ › per cambiare giorno."])),
-    G("Calendario",UL(["2 settimane: apertura, incaricato, chiusura. Pallino verde fatto, rosso non fatto, giallo oggi da fare.","Tocca un giorno per aprirne il dettaglio.","Turni dagli <b>Orari Trainer</b> (sede Cecina Center): apertura = primo turno, chiusura = ultimo, incaricato a rotazione tra chi è in sede; chi ne ha fatti meno passa prima. Se cambiano gli orari, i turni si aggiornano da soli."])),
+    G("Giorno",UL(["Per ogni giorno: chi ha pulito e a che ora (ora del server, non modificabile), chi ha controllato, ✓/✗ voce per voce, note, foto (📷) e multe nate quel giorno.","\"in ritardo\" = incaricato registrato dopo la scadenza.","Frecce ‹ › per cambiare giorno."])),
+    G("Calendario",UL(["2 settimane: apertura, incaricato, controllo serale. Pallino verde fatto, rosso non fatto, giallo oggi da fare.","Tocca un giorno per aprirne il dettaglio.",`Turni dagli <b>Orari Trainer</b> (sede Cecina Center), tutti a rotazione: apertura tra chi inizia entro le ${mo}, controllo serale tra chi finisce dopo le ${se}, incaricato tra chi è in sede. Nessuno controlla sé stesso. Se cambiano gli orari, i turni si aggiornano da soli.`])),
     G("Registro",UL(["Ultime registrazioni con esito e note.","% di turni registrati negli ultimi 30 giorni."])),
-    G("Multe",UL(["Nascono <b>da confermare</b>: scegli <b>confermata</b> o <b>annullata</b>.","A fine mese togli gli importi dai compensi, poi tocca <b>Segna tutte come decurtate</b>.","Frecce ‹ › per cambiare mese."])),
-    G("Impostazioni",UL(["<b>Giorni impresa</b>: inseriscili appena l'impresa li comunica a inizio mese (quei giorni l'incaricato controlla solo saponi e carta).","<b>Incaricato</b>: ogni giorno oppure un giorno sì e uno no.","<b>Importo multa</b>, <b>data inizio rotazione</b>.","<b>Persone</b>: \"sempre in sede\" per chi non compare negli Orari Trainer; togli \"attivo\" per escludere qualcuno dalla rotazione."]))
+    G("Multe",UL(["Nascono <b>da confermare</b>: scegli <b>confermata</b> o <b>annullata</b>. Guarda le foto prima di confermare.",`Le dimenticanze tollerate (${tl} al mese a testa) compaiono già annullate, a 0 €.`,"A fine mese togli gli importi dai compensi, poi tocca <b>Segna tutte come decurtate</b>."])),
+    G("Impostazioni",UL(["<b>Giorni impresa</b>: inseriscili appena l'impresa li comunica a inizio mese.","<b>Regole</b>: frequenza, importo multa, data inizio, scadenza incaricato, orari per apertura e controllo serale, dimenticanze tollerate.","<b>Persone</b>: \"sempre in sede\" per chi non compare negli Orari Trainer; togli \"attivo\" per escludere qualcuno.","<b>PIN personali</b>: \"Nuovo PIN\" genera un PIN da comunicare (viene mostrato una sola volta) e scollega i vecchi telefoni di quella persona. Tocca due volte per confermare."]))
   ];
   return `<div class="day"><h2>Guida</h2><button class="btn" id="g-back">← Indietro</button></div>`+(MODE==="admin"?`<div class="lbl">Amministrazione</div>`+admin.join("")+`<div class="lbl">Cosa vede lo staff</div>`:"")+staff.join("");
 }
@@ -344,18 +385,33 @@ function bind(){
   document.querySelectorAll("[data-rmimp]").forEach(b=>b.onclick=async()=>{S.impresa=S.impresa.filter(d=>d!==b.dataset.rmimp);await db.del("impresa",b.dataset.rmimp);reset();render()});
   on("imp-add",async()=>{const d=$("imp-d").value;if(!d||S.impresa.includes(d))return;S.impresa.push(d);await db.save("impresa",{date:d});reset();toast("Giorno impresa aggiunto");render()});
   on("c-save",async()=>{S.cfg.freq=+$("c-freq").value;S.cfg.multa=+$("c-multa").value||0;S.cfg.start=$("c-start").value;
+    S.cfg.deadline=$("c-dl").value||"18:00";S.cfg.mattina=$("c-mat").value||"10:00";S.cfg.sera=$("c-sera").value||"19:30";S.cfg.tolleranza=+$("c-tol").value||0;
     document.querySelectorAll("[data-alw]").forEach(i=>S.cfg.people[+i.dataset.alw].always=i.checked);
     document.querySelectorAll("[data-on]").forEach(i=>S.cfg.people[+i.dataset.on].off=!i.checked);
     await db.save("config",S.cfg);reset();toast("Impostazioni salvate");render()});
   on("b-push",enablePush);
+  document.querySelectorAll("[data-newpin]").forEach(b=>b.onclick=async()=>{const n=b.dataset.newpin;
+    if(!confirmBox(b,"Conferma: nuovo PIN"))return;
+    try{const np=DEMO?"1234":await rpc("pul_admin_new_pin",{p_pin:pin(),p_person:n});
+      $("dlgBody").innerHTML=`<h3>Nuovo PIN</h3><p style="margin:0">${esc(n)}</p><div style="font:800 40px var(--display);letter-spacing:.2em;text-align:center">${esc(np)}</div><span class="note">Comunicalo a ${esc(first(n))}: non verrà più mostrato.</span><button class="primary" id="np-ok">Fatto</button>`;
+      $("dlg").showModal();$("np-ok").onclick=()=>{$("dlg").close();loadPins()}}catch(e){toast(e.message)}});
+  document.querySelectorAll("[data-foto]").forEach(b=>b.onclick=()=>showFoto(b.dataset.foto));
   document.querySelectorAll("[data-cover]").forEach(b=>b.onclick=()=>{S.cover=b.dataset.cover;render()});
   bindForm();
 }
 function reset(){clearCalc();rebuildMulte()}
 function toast(t){const e=$("toast");e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2200)}
+const tok=()=>ls.get("pul-tok")||"";
 function pickMe(){
-  $("dlgBody").innerHTML=`<h3>Chi sei?</h3><select id="me-s"><option value="">— scegli —</option>${S.cfg.people.map(p=>`<option ${p.name===S.me?"selected":""}>${esc(p.name)}</option>`).join("")}</select><button class="primary" id="me-ok">Conferma</button>`;
-  $("dlg").showModal();$("me-ok").onclick=()=>{S.me=$("me-s").value;ls.set("pul-me",S.me||null);$("dlg").close();S.open=null;S.dirty=false;render()};
+  $("dlgBody").innerHTML=`<h3>Chi sei?</h3><select id="me-s"><option value="">— scegli —</option>${S.cfg.people.filter(p=>!p.off).map(p=>`<option ${p.name===S.me?"selected":""}>${esc(p.name)}</option>`).join("")}</select>
+    ${DEMO?"":`<input id="me-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="Il tuo PIN personale" style="border:1px solid var(--line);border-radius:8px;padding:12px;font-size:18px;background:var(--surface)"><span class="note">Il PIN te lo dà l'amministrazione. Serve una volta sola su questo telefono.</span>`}
+    <div id="me-err" class="alert ko" hidden></div><button class="primary" id="me-ok">Entra</button>`;
+  $("dlg").showModal();
+  const go=async()=>{const n=$("me-s").value;if(!n)return;const b=$("me-ok");b.disabled=true;b.textContent="Verifico…";
+    try{if(!DEMO){const t=await rpc("pul_login",{p_person:n,p_pin:$("me-pin").value.trim()});ls.set("pul-tok",t)}
+      S.me=n;ls.set("pul-me",n);if(ls.get("pul-push")!==n)ls.set("pul-push",null);$("dlg").close();S.open=null;S.dirty=false;render();flushQueue()}
+    catch(e){$("me-err").textContent=e.message;$("me-err").hidden=false;b.disabled=false;b.textContent="Entra"}};
+  $("me-ok").onclick=go;const pi=$("me-pin");if(pi)pi.onkeydown=e=>{if(e.key==="Enter")go()};
 }
 $("b-me").onclick=pickMe;
 $("b-guide").onclick=()=>{S.guide=!S.guide;render();scrollTo(0,0)};
@@ -394,18 +450,26 @@ function fromCache(){const d=lsj.get("pul-data"),o=lsj.get("pul-orari");if(!d)re
 async function loadAll(){
   const orari=loadOrari().catch(()=>{if(!S.slots.length)toast("Orari Trainer non raggiungibili")});
   const d=await rpc("pul_load");lsj.set("pul-data",d);applyLoad(d);
-  if(MODE==="admin"&&pin()){try{const a=await rpc("pul_admin_load",{p_pin:pin()});S.admin=true;S.multe=(a.multe||[]).map(m=>({...m,importo:Number(m.importo),manual:m.stato!=="da confermare"}));S.pushOn=a.push||[]}catch(e){S.admin=false;ls.set("pul-pin",null)}}
+  if(MODE==="admin"&&pin()){try{const a=await rpc("pul_admin_load",{p_pin:pin()});S.admin=true;S.multe=(a.multe||[]).map(m=>({...m,importo:Number(m.importo),manual:m.stato!=="da confermare"}));S.pushOn=a.push||[];loadPins()}catch(e){S.admin=false;ls.set("pul-pin",null)}}
   reset();softRender();
   await orari;reset();softRender();syncTurni();
 }
 // non ridisegna mentre qualcuno sta compilando una checklist
 function softRender(){if(S.dirty||document.querySelector("dialog[open]")){S.pendingRender=true;return}render()}
 /* ---------- coda invii (registrazione mai persa, anche senza rete) ---------- */
-function queuePush(rec){const q=(lsj.get("pul-queue")||[]).filter(x=>x.rec.id!==rec.id);q.push({rec,swaps:S.swaps.filter(x=>x.date===rec.date)});lsj.set("pul-queue",q);flushQueue()}
+function queuePush(rec,take,photos){const q=(lsj.get("pul-queue")||[]).filter(x=>x.rec.id!==rec.id);q.push({rec,take:!!take,photos:photos||[]});
+  try{lsj.set("pul-queue",q)}catch(e){};flushQueue(q)}
 let flushing=false;
 async function flushQueue(){
-  if(DEMO||flushing)return;const q=lsj.get("pul-queue")||[];if(!q.length)return;flushing=true;
-  try{for(const it of q){await rpc("pul_save_log",{rec:it.rec,swaps:it.swaps});lsj.set("pul-queue",(lsj.get("pul-queue")||[]).filter(x=>x.rec.id!==it.rec.id))}syncTurni()}
+  if(DEMO||flushing||!tok())return;const q=lsj.get("pul-queue")||[];if(!q.length)return;flushing=true;
+  const drop=id=>lsj.set("pul-queue",(lsj.get("pul-queue")||[]).filter(x=>x.rec.id!==id));
+  try{for(const it of q){
+      try{const r=await rpc("pul_save_log",{p_token:tok(),rec:it.rec,take:it.take,photos:it.photos});
+        const l=S.logs.find(x=>x.id===it.rec.id);if(l){Object.assign(l,{id:r.id,ts:r.ts,late:r.late,person:r.person})}drop(it.rec.id)}
+      catch(e){if(/solo i compiti di oggi|non valido/.test(e.message)){drop(it.rec.id);toast("Registrazione scartata: "+e.message)}
+        else if(/Accesso scaduto/.test(e.message)){ls.set("pul-tok",null);toast("Inserisci di nuovo il tuo PIN: la registrazione è salvata sul telefono");pickMe();break}
+        else throw e}}
+    reset();softRender();syncTurni()}
   catch(e){toast("Salvato sul telefono: lo invio appena c'è rete")}
   finally{flushing=false}
 }
@@ -440,7 +504,7 @@ async function enablePush(){
     const key=await rpc("pul_vapid");
     let sub=await reg.pushManager.getSubscription();
     if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(key)});
-    await rpc("pul_push_sub",{p_person:S.me,p_sub:sub.toJSON()});
+    await rpc("pul_push_sub",{p_token:tok(),p_sub:sub.toJSON()});
     ls.set("pul-push",S.me);toast("Avviso attivato 🔔");render();
   }catch(e){toast(e.message||"Notifiche non disponibili")}
 }
@@ -457,6 +521,8 @@ function pushBox(){
     S.loadedAt=Date.now();
     try{await loadAll()}catch(e){toast(cached?"Offline: dati dell'ultima apertura":"Errore caricamento: "+e.message)}
     if(!cached)render();flushQueue();
+    if(MODE==="staff"&&S.me&&!tok())setTimeout(pickMe,300);
+    else if(MODE==="staff"&&tok())rpc("pul_whoami",{p_token:tok()}).then(n=>{if(!n){ls.set("pul-tok",null);pickMe()}else if(n!==S.me){S.me=n;ls.set("pul-me",n);softRender()}}).catch(()=>{});
   }
   if(MODE==="admin"&&!S.admin&&!DEMO)askPin();
   else if(!S.me&&MODE==="staff")setTimeout(pickMe,300);

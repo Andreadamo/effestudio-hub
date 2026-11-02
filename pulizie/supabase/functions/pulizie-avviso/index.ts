@@ -16,20 +16,18 @@ const rpc = async (fn: string, args: unknown) => {
 
 Deno.serve(async (req) => {
   try {
-    const { secret } = await req.json().catch(() => ({}));
-    const job = await rpc("pul_push_job", { p_secret: secret });
+    const { secret, kind = "domani" } = await req.json().catch(() => ({}));
+    const job = await rpc("pul_push_job", { p_secret: secret, p_kind: kind });
     webpush.setVapidDetails(job.vapid.subject, job.vapid.public, job.vapid.private);
     const sent: { person: string; role: string }[] = [];
     const gone: string[] = [];
     for (const t of job.targets || []) {
-      const body = JSON.stringify({
-        title: "🧽 Domani sei l'incaricato pulizie",
-        body: t.imp
-          ? "Giorno impresa: controlla solo saponi e carta. Apri Check Pulizie per la checklist."
-          : "Spogliatoi, cestini, desk e sala. Apri Check Pulizie per la checklist.",
-        url: "/effestudio-hub/?app=pulizie",
-        tag: "pulizie-" + job.date,
-      });
+      const msg = kind === "inc"
+        ? { title: "🧽 Pulizie: oggi tocca a te", body: `Non hai ancora registrato i compiti da incaricato. Scadenza ore ${job.deadline}.` }
+        : kind === "chi"
+        ? { title: "🌙 Controllo serale pulizie", body: "Non hai ancora registrato il controllo: verifica l'incaricato, docce e desk." }
+        : { title: "🧽 Domani sei l'incaricato pulizie", body: t.imp ? `Giorno impresa: solo saponi e carta, entro le ${job.deadline}.` : `Spogliatoi, cestini, desk e sala, entro le ${job.deadline}.` };
+      const body = JSON.stringify({ ...msg, url: "/effestudio-hub/?app=pulizie", tag: `pulizie-${kind}-${job.date}` });
       let ok = false;
       for (const s of t.subs || []) {
         try { await webpush.sendNotification(s, body, { TTL: 43200 }); ok = true; }

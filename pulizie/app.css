@@ -96,3 +96,8 @@ button:not(:disabled):active,.chk:active{transform:scale(.97);transition:transfo
 .hbtn{display:flex;gap:6px;align-items:center}
 .gl{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .panel td .s{display:block}
+.foto{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px dashed var(--line);border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+.foto.req{border-color:var(--crit);color:var(--crit);background:var(--crit-soft)}
+.foto.done{border-style:solid;border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.foto img{max-width:160px;border-radius:6px}
+.btn.sm{padding:4px 10px;font-size:13px;min-height:32px}

@@ -23,4 +23,8 @@ Aggiungere un'app: una riga in `apps.js`.
 - `pulizie/` → **Monitoraggio Pulizie** (Amministrazione, PIN pulizie): dettaglio giorno, calendario, registro, multe (decurtate dal compenso), impostazioni e giorni impresa.
 - Turni calcolati dagli Orari Trainer (sede Cecina Center): apertura = primo turno, chiusura = ultimo, incaricato a rotazione tra chi è in sede.
 - Dati: Supabase progetto `spring-league`, schema `pulizie` (accesso solo via funzioni `pul_*`, vedi `pulizie/supabase/schema.sql`).
-- Avviso: edge function `pulizie-avviso`, lanciata da pg_cron alle 17:00 UTC (18:00 inverno / 19:00 estate).
+- Accesso staff: nome + PIN personale (generato in Impostazioni → PIN personali); persona e ora delle registrazioni le decide il server.
+- Turni tutti a rotazione: apertura (chi inizia entro le 10:00, mai chi ha fatto il controllo la sera prima), controllo serale (chi finisce dopo le 19:30), incaricato (mai chi fa il controllo serale).
+- Foto obbligatoria per ogni ✗ al controllo; scadenza incaricato 18:00; 1 dimenticanza/ritardo al mese tollerata.
+- Notifiche: edge function `pulizie-avviso` via pg_cron (UTC): 17:00 domani sei l'incaricato · 15:00 lun-ven promemoria incaricato · 19:30 lun-ven promemoria controllo serale.
+- Schema: `pulizie/supabase/schema.sql` + `pulizie/supabase/v2.sql`.
