@@ -11,7 +11,7 @@ html,body{margin:0}body{background:var(--bg);color:var(--fg);font:400 16px/1.4 v
 h1,h2,h3{font-family:var(--display);margin:0}
 .wrap{max-width:760px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) 14px calc(90px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
 header{display:flex;justify-content:space-between;align-items:center;gap:10px}
-header>div[hidden]+.me{margin-left:auto}
+header>div[hidden]+.hbtn{margin-left:auto}
 header h1{font-size:19px;font-weight:800;text-transform:uppercase;letter-spacing:.02em}
 header small{display:block;color:var(--muted);font-size:13px}
 .me{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:7px 12px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap}
@@ -93,3 +93,6 @@ button:not(:disabled):active,.chk:active{transform:scale(.97);transition:transfo
 @keyframes sk{to{background-position:-200% 0}}
 @media (max-width:360px){.kpi b{font-size:18px}.kpi span{font-size:11px}.wrap{padding-left:10px;padding-right:10px}}
 @media (prefers-reduced-motion:reduce){.skel{animation:none}}
+.hbtn{display:flex;gap:6px;align-items:center}
+.gl{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.panel td .s{display:block}

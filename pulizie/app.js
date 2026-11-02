@@ -289,12 +289,41 @@ function viewSet(){
   return h;
 }
 
+
+/* ---------- GUIDA ---------- */
+const G=(t,body)=>`<div class="panel"><h3>${t}</h3>${body}</div>`;
+const UL=a=>`<ul class="gl">${a.map(x=>`<li>${x}</li>`).join("")}</ul>`;
+function viewGuida(){
+  const staff=[
+    G("1 · Primo accesso",UL(["Tocca il nome in alto e scegli <b>chi sei</b> (una volta sola per telefono).","Tocca <b>Attiva avviso</b> in fondo: la sera prima del tuo turno da incaricato ti arriva una notifica alle 18:00 (19:00 con l'ora legale).","iPhone: l'avviso funziona solo se l'HUB è aggiunto alla Home (Safari → Condividi → Aggiungi a Home) e lo apri da lì."])),
+    G("2 · I tre compiti",`<table><tbody>
+      <tr><td><b>Incaricato del giorno</b><span class="s">lun-ven, a rotazione, circa 1 volta ogni 2 settimane</span></td><td>Saponi, carta mani, bagno, cestini, desk, sala. Max 10 minuti, entro la giornata.<span class="s">Giorno impresa: solo saponi e carta.</span></td></tr>
+      <tr><td><b>Chiusura</b><span class="s">chi fa l'ultimo turno della sera</span></td><td>Controlla ✓/✗ ogni compito dell'incaricato, poi docce, asciugatura spogliatoi e desk: tutto pronto per il giorno dopo.</td></tr>
+      <tr><td><b>Apertura</b><span class="s">chi fa il primo turno del mattino</span></td><td>Controlla ✓/✗ come ha lasciato spogliatoi, docce e desk chi ha chiuso la sera prima.</td></tr></tbody></table>`),
+    G("3 · Come registrare",UL(["Apri <b>Check Pulizie</b>: vedi solo i tuoi compiti di oggi.","Incaricato: spunta ogni voce fatta e scegli lo stato della sala (ok / pulita da me / da pulire).","Chi controlla: per ogni voce tocca <b>✓</b> se è fatta, <b>✗</b> se non è fatta.","Scrivi nelle <b>Note</b> cosa manca o cosa hai segnalato, poi tocca <b>Registra</b>.","Senza rete la registrazione resta sul telefono e parte da sola appena torna la connessione."])),
+    G("4 · Cambi turno",UL(["Se fai il turno di un collega usa <b>Copro un collega</b>: il turno passa a te e risulta registrato a tuo nome.","Senza registrazione il turno resta a chi era in calendario."])),
+    G("5 · Multe",UL(["Una ✗ al controllo o un turno non registrato crea una multa all'incaricato (o a chi ha chiuso).","L'amministrazione la conferma o la annulla.","Le multe confermate vengono <b>decurtate dal compenso del mese</b>."])),
+    G("Problemi?",UL(["Nome sbagliato: tocca il nome in alto e cambialo.","Non vedi il turno giusto: tocca ⟳ in alto nell'HUB.","Nell'HUB compare <b>Aggiorna</b>: toccalo per avere l'ultima versione."]))
+  ];
+  const admin=[
+    G("Giorno",UL(["Per ogni giorno: chi ha pulito e a che ora, chi ha controllato, ✓/✗ voce per voce, note e multe nate quel giorno.","Frecce ‹ › per cambiare giorno."])),
+    G("Calendario",UL(["2 settimane: apertura, incaricato, chiusura. Pallino verde fatto, rosso non fatto, giallo oggi da fare.","Tocca un giorno per aprirne il dettaglio.","Turni dagli <b>Orari Trainer</b> (sede Cecina Center): apertura = primo turno, chiusura = ultimo, incaricato a rotazione tra chi è in sede; chi ne ha fatti meno passa prima. Se cambiano gli orari, i turni si aggiornano da soli."])),
+    G("Registro",UL(["Ultime registrazioni con esito e note.","% di turni registrati negli ultimi 30 giorni."])),
+    G("Multe",UL(["Nascono <b>da confermare</b>: scegli <b>confermata</b> o <b>annullata</b>.","A fine mese togli gli importi dai compensi, poi tocca <b>Segna tutte come decurtate</b>.","Frecce ‹ › per cambiare mese."])),
+    G("Impostazioni",UL(["<b>Giorni impresa</b>: inseriscili appena l'impresa li comunica a inizio mese (quei giorni l'incaricato controlla solo saponi e carta).","<b>Incaricato</b>: ogni giorno oppure un giorno sì e uno no.","<b>Importo multa</b>, <b>data inizio rotazione</b>.","<b>Persone</b>: \"sempre in sede\" per chi non compare negli Orari Trainer; togli \"attivo\" per escludere qualcuno dalla rotazione."]))
+  ];
+  return `<div class="day"><h2>Guida</h2><button class="btn" id="g-back">← Indietro</button></div>`+(MODE==="admin"?`<div class="lbl">Amministrazione</div>`+admin.join("")+`<div class="lbl">Cosa vede lo staff</div>`:"")+staff.join("");
+}
+
 /* ---------- render ---------- */
 const TABS=[["oggi","Giorno",'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>'],["cal","Calendario",'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'],["reg","Registro",'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>'],["multe","Multe",'<path d="M17 6.5A7 7 0 1 0 17 17.5M4 10h9M4 14h9"/>'],["set","Impostaz.",'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>']];
 function render(){
   S.pendingRender=false;S.dirty=false;
   $("demo").hidden=!DEMO;$("b-me").hidden=MODE==="admin";$("b-me").textContent=S.me?"👤 "+first(S.me):"Chi sei?";
   if(window.self!==window.top)document.querySelector("#hdr>div").hidden=true;
+  $("b-guide").textContent=S.guide?"✕ Chiudi":"📖 Guida";
+  if(S.guide){document.querySelector(".tabs").hidden=true;$("view").innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">${viewGuida()}</div>`;$("g-back").onclick=()=>{S.guide=false;render();scrollTo(0,0)};return}
+  document.querySelector(".tabs").hidden=false;
   if(MODE==="staff"){document.querySelector(".tabs").hidden=true;$("view").innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">${viewStaff()}</div>`;bind();return}
   if(!S.admin){document.querySelector(".tabs").hidden=true;$("view").innerHTML=`<div class="panel"><b>Solo amministrazione</b><span class="note">Serve il PIN amministrazione pulizie.</span><button class="primary" id="b-pin">Inserisci PIN</button></div>`;$("b-pin").onclick=askPin;return}
   $("tabs").innerHTML=TABS.filter(t=>t[0]!=="set"||S.admin).map(([k,n,ic])=>`<button data-tab="${k}" aria-current="${S.tab===k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic}</svg>${n}</button>`).join("");
@@ -329,6 +358,7 @@ function pickMe(){
   $("dlg").showModal();$("me-ok").onclick=()=>{S.me=$("me-s").value;ls.set("pul-me",S.me||null);$("dlg").close();S.open=null;S.dirty=false;render()};
 }
 $("b-me").onclick=pickMe;
+$("b-guide").onclick=()=>{S.guide=!S.guide;render();scrollTo(0,0)};
 
 /* ---------- Supabase (funzioni pul_*) ---------- */
 const pin=()=>ls.get("pul-pin")||"";
